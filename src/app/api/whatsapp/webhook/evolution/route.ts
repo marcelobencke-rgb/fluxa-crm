@@ -61,7 +61,7 @@ async function processEvolutionWebhook(body: any, instanceName: string) {
   const event = body.event
 
   // 1. Handle incoming messages
-  if (event === 'messages.upsert') {
+  if (event === 'messages.upsert' || event === 'MESSAGES_UPSERT') {
     const msgData = body.data?.message || body.data
     // Only process inbound messages
     if (msgData?.key?.fromMe === true) return
@@ -126,7 +126,7 @@ async function processEvolutionWebhook(body: any, instanceName: string) {
     )
   } 
   // 2. Handle status updates
-  else if (event === 'messages.update') {
+  else if (event === 'messages.update' || event === 'MESSAGES_UPDATE') {
     const updates = body.data || []
     for (const update of updates) {
       const msgId = update?.key?.id

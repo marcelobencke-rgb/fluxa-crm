@@ -62,7 +62,7 @@ async function processEvolutionWebhook(body: any, instanceName: string) {
 
   // 1. Handle incoming messages
   if (event === 'messages.upsert' || event === 'MESSAGES_UPSERT') {
-    const msgData = body.data?.message || body.data
+    const msgData = Array.isArray(body.data) ? body.data[0] : body.data
     // Only process inbound messages
     if (msgData?.key?.fromMe === true) return
 
@@ -72,6 +72,8 @@ async function processEvolutionWebhook(body: any, instanceName: string) {
     const phone = remoteJid.split('@')[0]
     const pushName = msgData?.pushName || phone
     const msgId = msgData?.key?.id
+    
+    // The actual text/media content is inside msgData.message
     const messageContent = msgData?.message
 
     if (!messageContent) return

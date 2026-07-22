@@ -142,6 +142,26 @@ export async function GET() {
            throw new Error(`Evolution API returned ${res.status}`)
         }
         
+        // Auto-configure the webhook for the Evolution instance
+        const webhookUrl = `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/whatsapp/webhook/evolution`
+        try {
+          await fetch(`${evolution_api_url}/webhook/set/${evolution_instance_id}`, {
+            method: 'POST',
+            headers: { apikey: evolution_api_key, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              webhook: {
+                enabled: true,
+                url: webhookUrl,
+                webhook_by_events: false,
+                webhookBase64: true,
+                events: ['MESSAGES_UPSERT', 'MESSAGES_UPDATE']
+              }
+            })
+          })
+        } catch (webhookErr) {
+          console.error('Failed to auto-configure Evolution webhook:', webhookErr)
+        }
+
         // We only care that the credentials are valid and the API responds.
         // Even if state is 'close' or 'connecting', it's valid to show the QR code.
         return NextResponse.json({ connected: true, phone_info: { id: config.evolution_instance_id, display_phone_number: 'Evolution Instance' } })

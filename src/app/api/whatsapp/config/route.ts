@@ -145,9 +145,9 @@ export async function GET() {
         // Auto-configure the webhook for the Evolution instance
         const webhookUrl = `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/whatsapp/webhook/evolution`
         try {
-          await fetch(`${evolution_api_url}/webhook/set/${evolution_instance_id}`, {
+          await fetch(`${config.evolution_api_url}/webhook/set/${config.evolution_instance_id}`, {
             method: 'POST',
-            headers: { apikey: evolution_api_key, 'Content-Type': 'application/json' },
+            headers: { apikey: config.evolution_api_key, 'Content-Type': 'application/json' },
             body: JSON.stringify({
               webhook: {
                 enabled: true,

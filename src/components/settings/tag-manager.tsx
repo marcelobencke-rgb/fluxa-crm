@@ -22,6 +22,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
 import { useTranslations } from 'next-intl';
 import type { Tag } from '@/types';
@@ -252,39 +253,17 @@ export function TagManager() {
       </CardContent>
 
       {/* Delete confirmation */}
-      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>{t('deleteTag')}</DialogTitle>
-            <DialogDescription>
-              {tagToDelete ? t('deleteConfirm', { name: tagToDelete.name }) : null}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="ghost"
-              onClick={() => setDeleteDialogOpen(false)}
-              disabled={deleting}
-            >
-              {t('cancel')}
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDelete}
-              disabled={deleting}
-            >
-              {deleting ? (
-                <>
-                  <Loader2 className="size-4 animate-spin" />
-                  {t('deleting')}
-                </>
-              ) : (
-                t('deleteTag')
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        title={t('deleteTag')}
+        description={tagToDelete ? t('deleteConfirm', { name: tagToDelete.name }) : null}
+        confirmLabel={t('deleteTag')}
+        cancelLabel={t('cancel')}
+        variant="destructive"
+        isLoading={deleting}
+        onConfirm={handleDelete}
+      />
     </Card>
   );
 }

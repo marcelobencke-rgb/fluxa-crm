@@ -40,32 +40,36 @@ afterEach(() => vi.unstubAllGlobals())
 
 describe('parseGeneration', () => {
   it('returns text with no handoff', () => {
-    expect(parseGeneration('Hello there')).toEqual({
+    expect(parseGeneration({ text: 'Hello there', usage: null })).toEqual({
       text: 'Hello there',
       handoff: false,
       usage: null,
+      tool_calls: undefined,
     })
   })
 
   it('detects + strips the handoff sentinel', () => {
-    expect(parseGeneration('[[HANDOFF]]')).toEqual({
+    expect(parseGeneration({ text: '[[HANDOFF]]', usage: null })).toEqual({
       text: '',
       handoff: true,
       usage: null,
+      tool_calls: undefined,
     })
-    expect(parseGeneration('Let me get a human [[HANDOFF]]')).toEqual({
+    expect(parseGeneration({ text: 'Let me get a human [[HANDOFF]]', usage: null })).toEqual({
       text: 'Let me get a human',
       handoff: true,
       usage: null,
+      tool_calls: undefined,
     })
   })
 
   it('passes usage straight through', () => {
     const usage = { promptTokens: 10, completionTokens: 5, totalTokens: 15 }
-    expect(parseGeneration('Hi', usage)).toEqual({
+    expect(parseGeneration({ text: 'Hi', usage })).toEqual({
       text: 'Hi',
       handoff: false,
       usage,
+      tool_calls: undefined,
     })
   })
 })

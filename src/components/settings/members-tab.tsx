@@ -55,6 +55,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { EmptyState } from '@/components/ui/empty-state';
 import {
   Select,
   SelectContent,
@@ -497,17 +499,11 @@ export function MembersTab() {
           ) : null}
 
           {invitations.length === 0 ? (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-8 text-center">
-                <Mail className="size-6 text-muted-foreground" />
-                <p className="mt-2 text-sm text-muted-foreground">
-                  {t('noPendingTitle')}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {t.rich('noPendingDesc', { bold: (chunks) => <strong>{chunks}</strong> })}
-                </p>
-              </CardContent>
-            </Card>
+            <EmptyState
+              icon={Mail}
+              title={t('noPendingTitle')}
+              description={t.rich('noPendingDesc', { bold: (chunks) => <strong>{chunks}</strong> })}
+            />
           ) : (
             <Card>
               <CardContent className="p-0">
@@ -537,10 +533,6 @@ export function MembersTab() {
                         </p>
                       </div>
 
-                      {/* Revoke: red default state, mirrors the
-                          members-tab Remove button. Pre-polish version
-                          read as a neutral secondary button until
-                          hover. */}
                       <Button
                         variant="outline"
                         size="sm"
@@ -566,50 +558,27 @@ export function MembersTab() {
         onCreated={loadEverything}
       />
 
-      <Dialog
+      <ConfirmDialog
         open={removingMember !== null}
         onOpenChange={(open) => {
           if (!open) setRemovingMember(null);
         }}
-      >
-        <DialogContent className="bg-popover border-border sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-popover-foreground">
-              <AlertTriangle className="size-4 text-amber-400" />
-              {t('removeDialogTitle')}
-            </DialogTitle>
-            <DialogDescription className="text-muted-foreground">
-              {t.rich('removeDialogDesc', { 
-                name: removingMember?.full_name || t('unnamed'),
-                bold: (chunks: React.ReactNode) => <strong>{chunks}</strong>
-              })}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="bg-popover border-border">
-            <Button
-              variant="outline"
-              onClick={() => setRemovingMember(null)}
-              className="border-border text-muted-foreground hover:bg-muted"
-            >
-              {t('cancel')}
-            </Button>
-            <Button
-              onClick={handleRemove}
-              disabled={!!pendingMemberAction}
-              className="bg-red-600 hover:bg-red-700 text-white"
-            >
-              {pendingMemberAction ? (
-                <>
-                  <Loader2 className="size-4 animate-spin" />
-                  {t('removing')}
-                </>
-              ) : (
-                t('removeBtn')
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        title={
+          <span className="flex items-center gap-2">
+            <AlertTriangle className="size-4 text-amber-400" />
+            {t('removeDialogTitle')}
+          </span>
+        }
+        description={t.rich('removeDialogDesc', { 
+          name: removingMember?.full_name || t('unnamed'),
+          bold: (chunks: React.ReactNode) => <strong>{chunks}</strong>
+        })}
+        confirmLabel={t('removeBtn')}
+        cancelLabel={t('cancel')}
+        variant="destructive"
+        isLoading={!!pendingMemberAction}
+        onConfirm={handleRemove}
+      />
     </section>
   );
 }

@@ -22,6 +22,8 @@ import { Copy, KeyRound, Loader2, Plus, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
@@ -155,27 +157,19 @@ export function ApiKeysSettings() {
       />
 
       {keys.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-10 text-center">
-            <KeyRound className="text-muted-foreground size-6" />
-            <p className="text-muted-foreground mt-2 text-sm">
-              {t('noApiKeys')}
-            </p>
-            {canEditSettings ? (
-              <p className="text-muted-foreground mt-1 text-xs">
-                {t.rich('createOneHint', {
+        <EmptyState
+          icon={KeyRound}
+          title={t('noApiKeys')}
+          description={
+            canEditSettings
+              ? t.rich('createOneHint', {
                   bold: (chunks: React.ReactNode) => (
                     <span className="text-foreground">{chunks}</span>
                   ),
-                })}
-              </p>
-            ) : (
-              <p className="text-muted-foreground mt-1 text-xs">
-                {t('askAdminHint')}
-              </p>
-            )}
-          </CardContent>
-        </Card>
+                })
+              : t('askAdminHint')
+          }
+        />
       ) : (
         <Card>
           <CardContent className="p-0">
@@ -200,14 +194,13 @@ export function ApiKeysSettings() {
                           {k.name}
                         </span>
                         {status === 'revoked' && (
-                          <Badge className="border-border bg-muted text-muted-foreground text-[10px] tracking-wide uppercase">
-                            {t('revoked')}
-                          </Badge>
+                          <StatusBadge status="inactive" label={t('revoked')} />
                         )}
                         {status === 'expired' && (
-                          <Badge className="border-border bg-muted text-muted-foreground text-[10px] tracking-wide uppercase">
-                            {t('expired')}
-                          </Badge>
+                          <StatusBadge status="warning" label={t('expired')} />
+                        )}
+                        {status === 'active' && (
+                          <StatusBadge status="active" label="Active" />
                         )}
                       </div>
                       <p className="text-muted-foreground mt-0.5 font-mono text-xs">

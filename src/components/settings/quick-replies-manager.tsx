@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { useTranslations } from "next-intl";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { EmptyState } from "@/components/ui/empty-state";
 import {
   Dialog,
   DialogContent,
@@ -143,9 +144,10 @@ export function QuickRepliesManager() {
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
         </div>
       ) : items.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-border py-10 text-center text-sm text-muted-foreground">
-          {t("emptyState")}
-        </p>
+        <EmptyState
+          icon={MessageSquare}
+          title={t("emptyState")}
+        />
       ) : (
         <ul className="flex flex-col gap-2">
           {items.map((qr) => (

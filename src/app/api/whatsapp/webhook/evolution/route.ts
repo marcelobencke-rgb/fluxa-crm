@@ -60,11 +60,15 @@ async function processEvolutionWebhook(body: any, instanceName: string) {
   const config = configRows[0]
   const event = body.event
 
-  // 1. Handle incoming messages
+  // 1. Handle incoming / outgoing messages
   if (event === 'messages.upsert' || event === 'MESSAGES_UPSERT') {
     const msgData = Array.isArray(body.data) ? body.data[0] : body.data
-    // Only process inbound messages
-    if (msgData?.key?.fromMe === true) return
+
+    // Messages sent from the user's mobile phone (fromMe: true)
+    if (msgData?.key?.fromMe === true) {
+      await processOutboundEvolutionMessage(msgData, config)
+      return
+    }
 
     const remoteJid = msgData?.key?.remoteJid
     if (!remoteJid || remoteJid.includes('@g.us')) return // Ignore groups for now
@@ -196,4 +200,154 @@ async function processEvolutionWebhook(body: any, instanceName: string) {
       }
     }
   }
+}
+
+async function processOutboundEvolutionMessage(msgData: any, config: any) {
+  const remoteJid = msgData?.key?.remoteJid
+  if (!remoteJid || remoteJid.includes('@g.us')) return // Ignore groups for now
+
+  const msgId = msgData?.key?.id
+  if (!msgId) return
+
+  // 1) Deduplicate: check if this message is already in DB (e.g. sent via WACRM web interface)
+  const { data: existingMsg } = await supabaseAdmin()
+    .from('messages')
+    .select('id')
+    .eq('message_id', msgId)
+    .maybeSingle()
+
+  if (existingMsg) {
+    // Already recorded — sent from WACRM directly
+    return
+  }
+
+  const phone = remoteJid.split('@')[0]
+  const pushName = msgData?.pushName || phone
+  const messageContent = msgData?.message
+  if (!messageContent) return
+
+  // Extract content & type
+  let contentType = 'text'
+  let contentText: string | null = null
+  let mediaUrl: string | null = null
+
+  if (messageContent.conversation || messageContent.extendedTextMessage) {
+    contentType = 'text'
+    contentText = messageContent.conversation || messageContent.extendedTextMessage?.text || null
+  } else if (messageContent.imageMessage) {
+    contentType = 'image'
+    const base64 = msgData.base64 || messageContent.imageMessage?.base64
+    mediaUrl = base64 ? `data:${messageContent.imageMessage.mimetype};base64,${base64}` : messageContent.imageMessage.url
+    contentText = messageContent.imageMessage.caption || null
+  } else if (messageContent.videoMessage) {
+    contentType = 'video'
+    const base64 = msgData.base64
+    mediaUrl = base64 ? `data:${messageContent.videoMessage.mimetype};base64,${base64}` : messageContent.videoMessage.url
+    contentText = messageContent.videoMessage.caption || null
+  } else if (messageContent.audioMessage) {
+    contentType = 'audio'
+    const base64 = msgData.base64
+    mediaUrl = base64 ? `data:${messageContent.audioMessage.mimetype};base64,${base64}` : messageContent.audioMessage.url
+  } else if (messageContent.documentMessage) {
+    contentType = 'document'
+    const base64 = msgData.base64
+    mediaUrl = base64 ? `data:${messageContent.documentMessage.mimetype};base64,${base64}` : messageContent.documentMessage.url
+    contentText = messageContent.documentMessage.caption || messageContent.documentMessage.fileName || null
+  } else {
+    contentType = 'text'
+    contentText = '[Mensagem enviada do celular]'
+  }
+
+  // 2) Find or create contact
+  let contactId: string | undefined
+  const { data: existingContact } = await supabaseAdmin()
+    .from('contacts')
+    .select('id')
+    .eq('account_id', config.account_id)
+    .eq('phone', phone)
+    .maybeSingle()
+
+  if (existingContact) {
+    contactId = existingContact.id
+  } else {
+    const { data: newContact, error: createContactErr } = await supabaseAdmin()
+      .from('contacts')
+      .insert({
+        account_id: config.account_id,
+        phone,
+        name: pushName,
+      })
+      .select('id')
+      .single()
+
+    if (!createContactErr && newContact) {
+      contactId = newContact.id
+    }
+  }
+
+  if (!contactId) return
+
+  // 3) Find or create conversation
+  let conversationId: string | undefined
+  const { data: existingConv } = await supabaseAdmin()
+    .from('conversations')
+    .select('id')
+    .eq('account_id', config.account_id)
+    .eq('contact_id', contactId)
+    .maybeSingle()
+
+  if (existingConv) {
+    conversationId = existingConv.id
+  } else {
+    const { data: newConv, error: createConvErr } = await supabaseAdmin()
+      .from('conversations')
+      .insert({
+        account_id: config.account_id,
+        contact_id: contactId,
+        status: 'open',
+        unread_count: 0,
+      })
+      .select('id')
+      .single()
+
+    if (!createConvErr && newConv) {
+      conversationId = newConv.id
+    }
+  }
+
+  if (!conversationId) return
+
+  const timestampIso = new Date(
+    parseInt(msgData.messageTimestamp || Math.floor(Date.now() / 1000)) * 1000
+  ).toISOString()
+
+  // 4) Insert message with sender_type = 'agent'
+  const { error: msgErr } = await supabaseAdmin()
+    .from('messages')
+    .insert({
+      conversation_id: conversationId,
+      sender_type: 'agent',
+      content_type: contentType,
+      content_text: contentText,
+      media_url: mediaUrl,
+      message_id: msgId,
+      status: 'sent',
+      created_at: timestampIso,
+    })
+
+  if (msgErr) {
+    console.error('Error inserting mobile-sent outbound message:', msgErr)
+    return
+  }
+
+  // 5) Update conversation last_message_text & last_message_at
+  const previewText = contentText || `[${contentType}]`
+  await supabaseAdmin()
+    .from('conversations')
+    .update({
+      last_message_text: previewText,
+      last_message_at: timestampIso,
+      updated_at: timestampIso,
+    })
+    .eq('id', conversationId)
 }

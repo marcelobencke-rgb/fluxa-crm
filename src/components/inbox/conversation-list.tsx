@@ -474,28 +474,44 @@ function ConversationItem({
       {/* Content */}
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
-          <span className="truncate text-sm font-medium text-foreground">
+          <span
+            className={cn(
+              "truncate text-sm",
+              conversation.unread_count > 0
+                ? "font-semibold text-foreground"
+                : "font-medium text-foreground/80"
+            )}
+          >
             {displayName}
           </span>
-          <span className="shrink-0 text-[10px] text-muted-foreground">{timeAgo}</span>
+          <span
+            className={cn(
+              "shrink-0 text-[10px]",
+              conversation.unread_count > 0
+                ? "font-semibold text-primary"
+                : "text-muted-foreground"
+            )}
+          >
+            {timeAgo}
+          </span>
         </div>
         <div className="mt-0.5 flex items-center justify-between gap-2">
-          <p className="truncate text-xs text-muted-foreground">
+          <p
+            className={cn(
+              "truncate text-xs",
+              conversation.unread_count > 0
+                ? "font-medium text-foreground/90"
+                : "text-muted-foreground"
+            )}
+          >
             {conversation.last_message_text || t("noMessagesYet")}
           </p>
           <div className="flex shrink-0 items-center gap-1.5">
             {conversation.unread_count > 0 && (
-              <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
+              <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
                 {conversation.unread_count}
               </span>
             )}
-            <span
-              className={cn(
-                "h-2 w-2 rounded-full",
-                STATUS_COLORS[conversation.status]
-              )}
-              title={conversation.status}
-            />
           </div>
         </div>
       </div>

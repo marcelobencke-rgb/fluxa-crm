@@ -129,19 +129,27 @@ async function processEvolutionWebhook(body: any, instanceName: string) {
   } 
   // 2. Handle status updates
   else if (event === 'messages.update' || event === 'MESSAGES_UPDATE') {
-    const updates = body.data || []
+    const updates = Array.isArray(body.data) ? body.data : [body.data || body]
     for (const update of updates) {
-      const msgId = update?.key?.id
-      const statusNum = update?.update?.status
+      const msgId = update?.key?.id || update?.id
+      const rawStatus = update?.update?.status ?? update?.status
 
-      if (!msgId || !statusNum) continue
+      if (!msgId || rawStatus === undefined || rawStatus === null) continue
 
-      let metaStatus = 'sent'
-      if (statusNum === 3) metaStatus = 'delivered'
-      else if (statusNum === 4) metaStatus = 'read'
-      
-      // We only care about delivered and read for now
-      if (metaStatus === 'delivered' || metaStatus === 'read') {
+      let metaStatus: string | null = null
+      const statusStr = String(rawStatus).toUpperCase()
+
+      if (rawStatus === 3 || statusStr === 'DELIVERY_ACK' || statusStr === 'DELIVERED') {
+        metaStatus = 'delivered'
+      } else if (rawStatus === 4 || rawStatus === 5 || statusStr === 'READ' || statusStr === 'PLAYED' || statusStr === 'READ_BY_ME') {
+        metaStatus = 'read'
+      } else if (rawStatus === 2 || statusStr === 'SERVER_ACK' || statusStr === 'SENT') {
+        metaStatus = 'sent'
+      } else if (statusStr === 'ERROR' || statusStr === 'FAILED') {
+        metaStatus = 'failed'
+      }
+
+      if (metaStatus) {
         await handleStatusUpdate({
           id: msgId,
           status: metaStatus,

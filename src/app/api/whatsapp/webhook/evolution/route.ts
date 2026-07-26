@@ -1,6 +1,8 @@
 import { NextResponse, after } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { processMessage, handleStatusUpdate } from '../route' // Reuse core logic
+import { findExistingContact } from '@/lib/contacts/dedupe'
+import { normalizePhone } from '@/lib/whatsapp/phone-utils'
 
 export const maxDuration = 60
 
@@ -229,10 +231,10 @@ async function processEvolutionWebhook(body: any, instanceName: string) {
 }
 
 async function processOutboundEvolutionMessage(msgData: any, config: any) {
-  const remoteJid = msgData?.key?.remoteJid
+  const remoteJid = msgData?.key?.remoteJid || msgData?.remoteJid || msgData?.key?.participant
   if (!remoteJid || remoteJid.includes('@g.us')) return // Ignore groups for now
 
-  const msgId = msgData?.key?.id
+  const msgId = msgData?.key?.id || msgData?.id
   if (!msgId) return
 
   // 1) Deduplicate: check if this message is already in DB (e.g. sent via WACRM web interface)
@@ -247,9 +249,10 @@ async function processOutboundEvolutionMessage(msgData: any, config: any) {
     return
   }
 
-  const phone = remoteJid.split('@')[0]
-  const pushName = msgData?.pushName || phone
-  const messageContent = msgData?.message
+  const rawPhone = remoteJid.split('@')[0].split(':')[0]
+  const phone = normalizePhone(rawPhone) || rawPhone
+  const pushName = msgData?.pushName || msgData?.verifiedBizName || phone
+  const messageContent = msgData?.message || msgData?.messageContent || msgData
   if (!messageContent) return
 
   // Extract content & type
@@ -257,9 +260,16 @@ async function processOutboundEvolutionMessage(msgData: any, config: any) {
   let contentText: string | null = null
   let mediaUrl: string | null = null
 
-  if (messageContent.conversation || messageContent.extendedTextMessage) {
+  const textBody =
+    messageContent.conversation ||
+    messageContent.extendedTextMessage?.text ||
+    messageContent.text ||
+    msgData.body ||
+    msgData.text
+
+  if (textBody || messageContent.conversation || messageContent.extendedTextMessage) {
     contentType = 'text'
-    contentText = messageContent.conversation || messageContent.extendedTextMessage?.text || null
+    contentText = textBody || null
   } else if (messageContent.imageMessage) {
     contentType = 'image'
     const base64 = msgData.base64 || messageContent.imageMessage?.base64
@@ -281,33 +291,37 @@ async function processOutboundEvolutionMessage(msgData: any, config: any) {
     contentText = messageContent.documentMessage.caption || messageContent.documentMessage.fileName || null
   } else {
     contentType = 'text'
-    contentText = '[Mensagem enviada do celular]'
+    contentText = textBody || '[Mensagem enviada do celular]'
   }
 
   // 2) Find or create contact
   let contactId: string | undefined
-  const { data: existingContact } = await supabaseAdmin()
-    .from('contacts')
-    .select('id')
-    .eq('account_id', config.account_id)
-    .eq('phone', phone)
-    .maybeSingle()
+  const existingContact = await findExistingContact(supabaseAdmin(), config.account_id, phone)
 
   if (existingContact) {
     contactId = existingContact.id
+    if (pushName && pushName !== phone && pushName !== existingContact.name) {
+      await supabaseAdmin()
+        .from('contacts')
+        .update({ name: pushName, updated_at: new Date().toISOString() })
+        .eq('id', existingContact.id)
+    }
   } else {
     const { data: newContact, error: createContactErr } = await supabaseAdmin()
       .from('contacts')
       .insert({
         account_id: config.account_id,
+        user_id: config.user_id,
         phone,
-        name: pushName,
+        name: pushName || phone,
       })
       .select('id')
       .single()
 
     if (!createContactErr && newContact) {
       contactId = newContact.id
+    } else if (createContactErr) {
+      console.error('Error creating contact in outbound evolution message:', createContactErr)
     }
   }
 
@@ -329,6 +343,7 @@ async function processOutboundEvolutionMessage(msgData: any, config: any) {
       .from('conversations')
       .insert({
         account_id: config.account_id,
+        user_id: config.user_id,
         contact_id: contactId,
         status: 'open',
         unread_count: 0,
@@ -338,6 +353,8 @@ async function processOutboundEvolutionMessage(msgData: any, config: any) {
 
     if (!createConvErr && newConv) {
       conversationId = newConv.id
+    } else if (createConvErr) {
+      console.error('Error creating conversation in outbound evolution message:', createConvErr)
     }
   }
 

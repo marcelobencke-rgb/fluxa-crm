@@ -22,6 +22,7 @@ export async function POST(request: Request) {
   try {
     body = await request.json()
   } catch (error) {
+    console.error('[evo-webhook] Invalid JSON body')
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
   }
 
@@ -30,6 +31,13 @@ export async function POST(request: Request) {
   const instanceName = typeof rawInstance === 'object'
     ? (rawInstance?.instanceName || rawInstance?.name || rawInstance?.id || '')
     : String(rawInstance || '')
+
+  console.log('[evo-webhook] POST received', JSON.stringify({
+    event: body.event,
+    instance: instanceName,
+    hasData: !!body.data,
+    topKeys: Object.keys(body),
+  }))
 
   after(async () => {
     try {
@@ -63,13 +71,15 @@ async function processEvolutionWebhook(body: any, instanceName: string) {
   }
 
   if (configRows.length === 0) {
-    console.error('Evolution Webhook: No config found for instance:', instanceName || 'unknown')
+    console.error('[evo-webhook] No config found for instance:', instanceName || 'unknown')
     return
   }
 
   const config = configRows[0]
   const rawEvent = String(body.event || body.type || body.action || '')
   const event = rawEvent.toLowerCase()
+
+  console.log('[evo-webhook] Processing event:', rawEvent, '| instance:', instanceName, '| config.account_id:', config.account_id)
 
   const rawData = body.data || body.response || body
   let msgData = Array.isArray(rawData) ? rawData[0] : rawData
@@ -80,7 +90,10 @@ async function processEvolutionWebhook(body: any, instanceName: string) {
     msgData = msgData.messageData
   }
 
-  if (!msgData) return
+  if (!msgData) {
+    console.log('[evo-webhook] No msgData found after extraction. rawData keys:', rawData ? Object.keys(rawData) : 'null')
+    return
+  }
 
   const remoteJid =
     msgData?.key?.remoteJid || msgData?.remoteJid || msgData?.key?.participant
@@ -94,6 +107,15 @@ async function processEvolutionWebhook(body: any, instanceName: string) {
     msgData?.audioMessage ||
     msgData?.documentMessage
   )
+
+  console.log('[evo-webhook] Payload analysis:', JSON.stringify({
+    remoteJid: remoteJid || null,
+    hasMessage,
+    fromMe: msgData?.key?.fromMe,
+    hasKey: !!msgData?.key,
+    msgDataKeys: Object.keys(msgData || {}),
+    messageKeys: msgData?.message ? Object.keys(msgData.message) : null,
+  }))
 
   // 1. Handle incoming / outgoing messages (if remoteJid + message contents exist)
   if (remoteJid && hasMessage) {
@@ -190,6 +212,15 @@ async function processEvolutionWebhook(body: any, instanceName: string) {
 
     const contact = { profile: { name: pushName }, wa_id: phone }
 
+    console.log('[evo-webhook] → Calling processMessage for inbound message:', JSON.stringify({
+      id: metaMessage.id,
+      from: metaMessage.from,
+      type: metaMessage.type,
+      textBody: metaMessage.text?.body?.substring(0, 100),
+      accountId: config.account_id,
+      userId: config.user_id,
+    }))
+
     // Use dummy access token since Evolution doesn't need it
     await processMessage(
       metaMessage,
@@ -199,9 +230,11 @@ async function processEvolutionWebhook(body: any, instanceName: string) {
       'evolution-dummy-token',
       'evolution',
     )
+    console.log('[evo-webhook] ✓ processMessage completed successfully')
   }
   // 2. Handle status updates
   else {
+    console.log('[evo-webhook] → Status update branch (no message content detected)')
     const rawData = body.data || body.response || body
     const updates = Array.isArray(rawData) ? rawData : [rawData]
     for (const update of updates) {

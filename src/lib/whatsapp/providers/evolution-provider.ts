@@ -27,14 +27,24 @@ export class EvolutionProvider implements IWhatsAppProvider {
 
   async sendMessage(params: SendMessageParams): Promise<{ messageId: string }> {
     const url = `${this.cleanUrl(this.apiUrl)}/message/sendText/${this.instanceName}`;
+    const payload: Record<string, unknown> = {
+      number: params.to,
+      text: params.text,
+      linkPreview: params.previewUrl !== false,
+    };
+
+    if (params.contextMessageId) {
+      payload.quoted = {
+        key: {
+          id: params.contextMessageId,
+        },
+      };
+    }
+
     const response = await fetch(url, {
       method: 'POST',
       headers: this.headers,
-      body: JSON.stringify({
-        number: params.to,
-        text: params.text,
-        linkPreview: params.previewUrl !== false,
-      }),
+      body: JSON.stringify(payload),
     });
 
     if (!response.ok) {
@@ -76,24 +86,34 @@ export class EvolutionProvider implements IWhatsAppProvider {
     return this.sendMessage({
       to: params.to,
       text: fallbackText,
+      contextMessageId: params.contextMessageId,
     });
   }
 
   async sendMedia(params: SendMediaParams): Promise<{ messageId: string }> {
     const url = `${this.cleanUrl(this.apiUrl)}/message/sendMedia/${this.instanceName}`;
     
-    // Evolution API requires base64 or URL for media. We will pass the mediaUrl.
+    const payload: Record<string, unknown> = {
+      number: params.to,
+      mediaMessage: {
+        mediatype: params.type === 'image' ? 'image' : params.type === 'video' ? 'video' : 'document',
+        caption: params.caption,
+        media: params.mediaUrl, 
+      },
+    };
+
+    if (params.contextMessageId) {
+      payload.quoted = {
+        key: {
+          id: params.contextMessageId,
+        },
+      };
+    }
+
     const response = await fetch(url, {
       method: 'POST',
       headers: this.headers,
-      body: JSON.stringify({
-        number: params.to,
-        mediaMessage: {
-          mediatype: params.type === 'image' ? 'image' : params.type === 'video' ? 'video' : 'document',
-          caption: params.caption,
-          media: params.mediaUrl, 
-        },
-      }),
+      body: JSON.stringify(payload),
     });
 
     if (!response.ok) {
@@ -106,13 +126,7 @@ export class EvolutionProvider implements IWhatsAppProvider {
   }
 
   async sendTemplate(params: SendTemplateParams): Promise<{ messageId: string }> {
-    // Evolution API has no native concept of "approved templates" like Meta.
-    // The CRM should pre-resolve the template text using `templateMessageParams`
-    // and send it as a standard text message.
-    
     let resolvedText = `[Template: ${params.templateName}]`;
-    // Ideally, the caller resolves the text and passes it in, or we implement a template compiler here.
-    // We will assume the caller passes the resolved text via `templateMessageParams.resolvedText` for Evolution.
     if (params.templateMessageParams?.resolvedText) {
       resolvedText = params.templateMessageParams.resolvedText;
     }
@@ -120,6 +134,7 @@ export class EvolutionProvider implements IWhatsAppProvider {
     return this.sendMessage({
       to: params.to,
       text: resolvedText,
+      contextMessageId: params.contextMessageId,
     });
   }
 }

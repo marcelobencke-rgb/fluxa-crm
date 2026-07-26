@@ -71,43 +71,56 @@ async function processEvolutionWebhook(body: any, instanceName: string) {
   const rawEvent = String(body.event || body.type || body.action || '')
   const event = rawEvent.toLowerCase()
 
-  // 1. Handle incoming / outgoing messages (upsert)
-  if (event.includes('upsert') || event === 'messages.upsert' || event === 'message.upsert') {
-    const rawData = body.data || body.response || body
-    let msgData = Array.isArray(rawData) ? rawData[0] : rawData
-    if (msgData?.messages && Array.isArray(msgData.messages)) {
-      msgData = msgData.messages[0]
-    }
-    if (msgData?.messageData) {
-      msgData = msgData.messageData
-    }
+  const rawData = body.data || body.response || body
+  let msgData = Array.isArray(rawData) ? rawData[0] : rawData
+  if (msgData?.messages && Array.isArray(msgData.messages)) {
+    msgData = msgData.messages[0]
+  }
+  if (msgData?.messageData) {
+    msgData = msgData.messageData
+  }
 
-    if (!msgData) return
+  if (!msgData) return
 
+  const remoteJid =
+    msgData?.key?.remoteJid || msgData?.remoteJid || msgData?.key?.participant
+  const hasMessage = !!(
+    msgData?.message ||
+    msgData?.messageContent ||
+    msgData?.conversation ||
+    msgData?.extendedTextMessage ||
+    msgData?.imageMessage ||
+    msgData?.videoMessage ||
+    msgData?.audioMessage ||
+    msgData?.documentMessage
+  )
+
+  // 1. Handle incoming / outgoing messages (if remoteJid + message contents exist)
+  if (remoteJid && hasMessage) {
     // Messages sent from the user's mobile phone (fromMe: true)
-    if (msgData?.key?.fromMe === true) {
+    if (msgData?.key?.fromMe === true || msgData?.fromMe === true) {
       await processOutboundEvolutionMessage(msgData, config)
       return
     }
 
-    const remoteJid = msgData?.key?.remoteJid || msgData?.remoteJid || msgData?.key?.participant
-    if (!remoteJid || remoteJid.includes('@g.us')) return // Ignore groups for now
+    if (remoteJid.includes('@g.us')) return // Ignore groups for now
 
     // Remove @s.whatsapp.net and device suffix like :12
     const phone = remoteJid.split('@')[0].split(':')[0]
     const pushName = msgData?.pushName || msgData?.verifiedBizName || phone
     const msgId = msgData?.key?.id || msgData?.id || `evo-${Date.now()}`
-    
-    // The actual text/media content is inside msgData.message or msgData
-    const messageContent = msgData?.message || msgData?.messageContent || msgData
 
-    if (!messageContent) return
+    // The actual text/media content is inside msgData.message or msgData
+    const messageContent =
+      msgData?.message || msgData?.messageContent || msgData
 
     // Transform Evolution payload into Meta-like format
     const metaMessage: any = {
       id: msgId,
       from: phone,
-      timestamp: String(msgData.messageTimestamp || Math.floor(Date.now() / 1000)),
+      timestamp: String(
+        msgData.messageTimestamp || Math.floor(Date.now() / 1000),
+      ),
       type: 'text', // default
     }
 
@@ -118,29 +131,57 @@ async function processEvolutionWebhook(body: any, instanceName: string) {
       msgData.body ||
       msgData.text
 
-    if (textBody || messageContent.conversation || messageContent.extendedTextMessage) {
+    if (
+      textBody ||
+      messageContent.conversation ||
+      messageContent.extendedTextMessage
+    ) {
       metaMessage.type = 'text'
       metaMessage.text = { body: textBody || '' }
     } else if (messageContent.imageMessage) {
       metaMessage.type = 'image'
       const base64 = msgData.base64 || messageContent.imageMessage?.base64
-      const url = base64 ? `data:${messageContent.imageMessage.mimetype};base64,${base64}` : messageContent.imageMessage.url
-      metaMessage.image = { id: url, mime_type: messageContent.imageMessage.mimetype, caption: messageContent.imageMessage.caption }
+      const url = base64
+        ? `data:${messageContent.imageMessage.mimetype};base64,${base64}`
+        : messageContent.imageMessage.url
+      metaMessage.image = {
+        id: url,
+        mime_type: messageContent.imageMessage.mimetype,
+        caption: messageContent.imageMessage.caption,
+      }
     } else if (messageContent.videoMessage) {
       metaMessage.type = 'video'
       const base64 = msgData.base64
-      const url = base64 ? `data:${messageContent.videoMessage.mimetype};base64,${base64}` : messageContent.videoMessage.url
-      metaMessage.video = { id: url, mime_type: messageContent.videoMessage.mimetype, caption: messageContent.videoMessage.caption }
+      const url = base64
+        ? `data:${messageContent.videoMessage.mimetype};base64,${base64}`
+        : messageContent.videoMessage.url
+      metaMessage.video = {
+        id: url,
+        mime_type: messageContent.videoMessage.mimetype,
+        caption: messageContent.videoMessage.caption,
+      }
     } else if (messageContent.audioMessage) {
       metaMessage.type = 'audio'
       const base64 = msgData.base64
-      const url = base64 ? `data:${messageContent.audioMessage.mimetype};base64,${base64}` : messageContent.audioMessage.url
-      metaMessage.audio = { id: url, mime_type: messageContent.audioMessage.mimetype }
+      const url = base64
+        ? `data:${messageContent.audioMessage.mimetype};base64,${base64}`
+        : messageContent.audioMessage.url
+      metaMessage.audio = {
+        id: url,
+        mime_type: messageContent.audioMessage.mimetype,
+      }
     } else if (messageContent.documentMessage) {
       metaMessage.type = 'document'
       const base64 = msgData.base64
-      const url = base64 ? `data:${messageContent.documentMessage.mimetype};base64,${base64}` : messageContent.documentMessage.url
-      metaMessage.document = { id: url, mime_type: messageContent.documentMessage.mimetype, filename: messageContent.documentMessage.fileName, caption: messageContent.documentMessage.caption }
+      const url = base64
+        ? `data:${messageContent.documentMessage.mimetype};base64,${base64}`
+        : messageContent.documentMessage.url
+      metaMessage.document = {
+        id: url,
+        mime_type: messageContent.documentMessage.mimetype,
+        filename: messageContent.documentMessage.fileName,
+        caption: messageContent.documentMessage.caption,
+      }
     } else {
       // Fallback
       metaMessage.type = 'text'
@@ -156,20 +197,11 @@ async function processEvolutionWebhook(body: any, instanceName: string) {
       config.account_id,
       config.user_id,
       'evolution-dummy-token',
-      'evolution'
+      'evolution',
     )
-  } 
+  }
   // 2. Handle status updates
-  else if (
-    event === 'messages.update' ||
-    event === 'MESSAGES_UPDATE' ||
-    event === 'message.update' ||
-    event === 'MESSAGE_UPDATE' ||
-    event === 'send.message' ||
-    event === 'SEND_MESSAGE' ||
-    event === 'status.find' ||
-    event === 'UPDATE_MESSAGE'
-  ) {
+  else {
     const rawData = body.data || body.response || body
     const updates = Array.isArray(rawData) ? rawData : [rawData]
     for (const update of updates) {

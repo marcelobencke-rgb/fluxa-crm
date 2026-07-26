@@ -667,6 +667,15 @@ export async function processMessage(
     .eq('sender_type', 'customer')
   const isFirstInboundMessage = (priorCustomerMsgCount ?? 0) === 0
 
+  const rawTs = Number(message.timestamp)
+  const timestampMs =
+    !isNaN(rawTs) && rawTs > 0
+      ? rawTs < 100000000000
+        ? rawTs * 1000
+        : rawTs
+      : Date.now()
+  const createdAtIso = new Date(timestampMs).toISOString()
+
   const { error: msgError } = await supabaseAdmin().from('messages').insert({
     conversation_id: conversation.id,
     sender_type: 'customer',
@@ -675,7 +684,7 @@ export async function processMessage(
     media_url: mediaUrl,
     message_id: message.id,
     status: 'delivered',
-    created_at: new Date(parseInt(message.timestamp) * 1000).toISOString(),
+    created_at: createdAtIso,
     reply_to_message_id: replyToInternalId,
     // Only populated for content_type='interactive'. Migration 010 added
     // the column; null for every other content_type so existing inserts

@@ -360,9 +360,14 @@ async function processOutboundEvolutionMessage(msgData: any, config: any) {
 
   if (!conversationId) return
 
-  const timestampIso = new Date(
-    parseInt(msgData.messageTimestamp || Math.floor(Date.now() / 1000)) * 1000
-  ).toISOString()
+  const rawTs = Number(msgData?.messageTimestamp)
+  const timestampMs =
+    !isNaN(rawTs) && rawTs > 0
+      ? rawTs < 100000000000
+        ? rawTs * 1000
+        : rawTs
+      : Date.now()
+  const timestampIso = new Date(timestampMs).toISOString()
 
   // 4) Insert message with sender_type = 'agent'
   const { error: msgErr } = await supabaseAdmin()

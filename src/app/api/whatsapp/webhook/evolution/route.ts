@@ -128,22 +128,56 @@ async function processEvolutionWebhook(body: any, instanceName: string) {
     )
   } 
   // 2. Handle status updates
-  else if (event === 'messages.update' || event === 'MESSAGES_UPDATE') {
-    const updates = Array.isArray(body.data) ? body.data : [body.data || body]
+  else if (
+    event === 'messages.update' ||
+    event === 'MESSAGES_UPDATE' ||
+    event === 'message.update' ||
+    event === 'MESSAGE_UPDATE' ||
+    event === 'send.message' ||
+    event === 'SEND_MESSAGE' ||
+    event === 'status.find' ||
+    event === 'UPDATE_MESSAGE'
+  ) {
+    const rawData = body.data || body.response || body
+    const updates = Array.isArray(rawData) ? rawData : [rawData]
     for (const update of updates) {
-      const msgId = update?.key?.id || update?.id
-      const rawStatus = update?.update?.status ?? update?.status
+      const msgId =
+        update?.key?.id ||
+        update?.id ||
+        update?.messageId ||
+        update?.keyId
+
+      const rawStatus =
+        update?.update?.status ??
+        update?.status ??
+        update?.statusNumber ??
+        update?.statusText
 
       if (!msgId || rawStatus === undefined || rawStatus === null) continue
 
       let metaStatus: string | null = null
       const statusStr = String(rawStatus).toUpperCase()
 
-      if (rawStatus === 3 || statusStr === 'DELIVERY_ACK' || statusStr === 'DELIVERED') {
+      if (
+        rawStatus === 3 ||
+        statusStr === 'DELIVERY_ACK' ||
+        statusStr === 'DELIVERED' ||
+        statusStr === 'RECEIPT'
+      ) {
         metaStatus = 'delivered'
-      } else if (rawStatus === 4 || rawStatus === 5 || statusStr === 'READ' || statusStr === 'PLAYED' || statusStr === 'READ_BY_ME') {
+      } else if (
+        rawStatus === 4 ||
+        rawStatus === 5 ||
+        statusStr === 'READ' ||
+        statusStr === 'PLAYED' ||
+        statusStr === 'READ_BY_ME'
+      ) {
         metaStatus = 'read'
-      } else if (rawStatus === 2 || statusStr === 'SERVER_ACK' || statusStr === 'SENT') {
+      } else if (
+        rawStatus === 2 ||
+        statusStr === 'SERVER_ACK' ||
+        statusStr === 'SENT'
+      ) {
         metaStatus = 'sent'
       } else if (statusStr === 'ERROR' || statusStr === 'FAILED') {
         metaStatus = 'failed'
@@ -154,7 +188,10 @@ async function processEvolutionWebhook(body: any, instanceName: string) {
           id: msgId,
           status: metaStatus,
           timestamp: String(Math.floor(Date.now() / 1000)),
-          recipient_id: update?.key?.remoteJid?.split('@')[0] || ''
+          recipient_id:
+            update?.key?.remoteJid?.split('@')[0] ||
+            update?.remoteJid?.split('@')[0] ||
+            ''
         })
       }
     }

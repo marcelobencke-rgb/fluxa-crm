@@ -688,6 +688,15 @@ export async function processMessage(
     return
   }
 
+  // Auto-advance all previous outbound agent messages in this conversation to 'read'
+  // because receiving a customer reply confirms delivery + read of the thread.
+  await supabaseAdmin()
+    .from('messages')
+    .update({ status: 'read' })
+    .eq('conversation_id', conversation.id)
+    .eq('sender_type', 'agent')
+    .in('status', ['sent', 'delivered'])
+
   // Update conversation
   const { error: convError } = await supabaseAdmin()
     .from('conversations')

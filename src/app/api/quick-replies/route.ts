@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
 import { getCurrentAccount, requireRole, toErrorResponse } from '@/lib/auth/account'
-import { supabaseAdmin } from '@/lib/automations/admin-client'
 import { validateInteractivePayload } from '@/lib/whatsapp/interactive'
 
 // Quick replies — reusable snippets (plain text or a saved interactive
@@ -60,7 +59,7 @@ export async function POST(request: Request) {
     content_text = text
   }
 
-  const { data, error } = await supabaseAdmin()
+  const { data, error } = await ctx.supabase
     .from('quick_replies')
     .insert({
       account_id: ctx.accountId,

@@ -214,16 +214,22 @@ function InboxPageInner() {
     checkConnection();
   }, []);
 
+  const activeConversationRef = useRef<Conversation | null>(null);
+  useEffect(() => {
+    activeConversationRef.current = activeConversation;
+  }, [activeConversation]);
+
   // Handle realtime message events
   const handleMessageEvent = useCallback(
     (event: { eventType: string; new: Message; old: Partial<Message> }) => {
       const newMsg = event.new;
+      const currentActive = activeConversationRef.current;
 
       if (event.eventType === "INSERT") {
         // Add to messages if it belongs to active conversation
         if (
-          activeConversation &&
-          newMsg.conversation_id === activeConversation.id
+          currentActive &&
+          newMsg.conversation_id === currentActive.id
         ) {
           setMessages((prev) => {
             // Avoid duplicates
@@ -250,9 +256,9 @@ function InboxPageInner() {
                     last_message_text: newMsg.content_text ?? "",
                     last_message_at: newMsg.created_at,
                     unread_count:
-                      activeConversation?.id === newMsg.conversation_id
+                      currentActive?.id === newMsg.conversation_id
                         ? 0
-                        : c.unread_count + 1,
+                        : (c.unread_count || 0) + 1,
                   }
                 : c,
             ),
@@ -274,7 +280,7 @@ function InboxPageInner() {
         );
       }
     },
-    [activeConversation, hydrateConversation]
+    [hydrateConversation]
   );
 
   // Handle realtime conversation events
@@ -285,6 +291,7 @@ function InboxPageInner() {
       old: Partial<Conversation>;
     }) => {
       const conv = event.new;
+      const currentActive = activeConversationRef.current;
 
       if (event.eventType === "INSERT") {
         // Prepend immediately for snappy UX so the new conv shows in the
@@ -303,19 +310,17 @@ function InboxPageInner() {
 
       if (event.eventType === "UPDATE") {
         if (knownConvIdsRef.current.has(conv.id)) {
-          // If this UPDATE is for the conv the user is currently viewing,
-          // suppress the incoming unread_count — the user is reading it
-          // RIGHT NOW, so any positive value would just flicker the badge
-          // back on for the ~100ms it takes for the reset effect's server
-          // UPDATE to round-trip. Non-active convs take the value as-is.
-          const isActive = activeConversation?.id === conv.id;
           setConversations((prev) =>
             prev.map((c) =>
               c.id === conv.id
                 ? {
                     ...c,
                     ...conv,
-                    unread_count: isActive ? 0 : conv.unread_count,
+                    contact: c.contact ?? conv.contact,
+                    unread_count:
+                      currentActive?.id === conv.id
+                        ? 0
+                        : (conv.unread_count ?? c.unread_count ?? 0),
                   }
                 : c,
             ),
@@ -329,14 +334,16 @@ function InboxPageInner() {
         }
 
         // Update active conversation if it changed
-        if (activeConversation && conv.id === activeConversation.id) {
+        if (currentActive && conv.id === currentActive.id) {
           setActiveConversation((prev) =>
-            prev ? { ...prev, ...conv } : prev
+            prev
+              ? { ...prev, ...conv, contact: prev.contact ?? conv.contact }
+              : prev,
           );
         }
       }
     },
-    [activeConversation, hydrateConversation]
+    [hydrateConversation]
   );
 
   // Subscribe to realtime. The `isConnected` flag below feeds the
@@ -451,33 +458,22 @@ function InboxPageInner() {
       setActiveConversation(conv);
       setActiveContact(conv.contact ?? null);
       setMessages([]);
-      // Optimistically clear the unread badge for this conv. The
-      // server-side reset is fired by the unread-reset effect inside
-      // MessageThread (which reads activeConversation.unread_count, not
-      // the list copy — so we deliberately leave that intact below to
-      // keep the effect firing), and the realtime UPDATE that comes
-      // back will sync to 0 again as a no-op. Zeroing the list copy
-      // here means the user sees the badge disappear the instant they
-      // click instead of waiting for the round-trip — and it persists
-      // even if the realtime UPDATE is dropped.
-      setConversations((prev) =>
-        prev.map((c) =>
-          c.id === conv.id && c.unread_count > 0
-            ? { ...c, unread_count: 0 }
-            : c,
-        ),
-      );
-      // Record the selection on the deep-link ref BEFORE we change the
-      // URL. The router.replace below flips `deepLinkConvId`, which can
-      // in turn cause ConversationList to refetch and eventually call
-      // handleConversationsLoaded again. Without this line, the ref
-      // still points at the previous value, the auto-select block
-      // sees `ref !== deepLinkConvId`, fires a second time, and
-      // clobbers the messages MessageThread just fetched.
+      if (conv.unread_count > 0) {
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.id === conv.id ? { ...c, unread_count: 0 } : c,
+          ),
+        );
+        const supabase = createClient();
+        supabase
+          .from("conversations")
+          .update({ unread_count: 0 })
+          .eq("id", conv.id)
+          .then(({ error }) => {
+            if (error) console.error("Failed to reset unread_count on select:", error);
+          });
+      }
       autoSelectedForDeepLinkRef.current = conv.id;
-      // Reflect the selection in the URL so a refresh lands the user
-      // back in the same thread, and so copy-paste links work. Use
-      // replace() to avoid polluting browser history with every click.
       router.replace(`/inbox?c=${conv.id}`, { scroll: false });
     },
     [activeConversation?.id, router]

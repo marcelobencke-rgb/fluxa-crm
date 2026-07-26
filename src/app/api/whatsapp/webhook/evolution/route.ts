@@ -23,12 +23,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
   }
 
-  // Evolution sends instance name. We use this to find the config.
-  const instanceName = body.instance
-
-  if (!instanceName) {
-    return NextResponse.json({ status: 'ignored', reason: 'No instance name' }, { status: 200 })
-  }
+  // Extract instance identifier regardless of structure (string, object, etc.)
+  const rawInstance = body.instance ?? body.instanceId ?? body.instanceName
+  const instanceName = typeof rawInstance === 'object'
+    ? (rawInstance?.instanceName || rawInstance?.name || rawInstance?.id || '')
+    : String(rawInstance || '')
 
   after(async () => {
     try {
@@ -42,27 +41,46 @@ export async function POST(request: Request) {
 }
 
 async function processEvolutionWebhook(body: any, instanceName: string) {
-  const { data: configRows, error: configError } = await supabaseAdmin()
-    .from('whatsapp_config')
-    .select('*')
-    .eq('evolution_instance_id', instanceName)
-
-  if (configError || !configRows || configRows.length === 0) {
-    console.error('Evolution Webhook: No config found for instance:', instanceName)
-    return
+  let configRows: any[] = []
+  if (instanceName) {
+    const { data } = await supabaseAdmin()
+      .from('whatsapp_config')
+      .select('*')
+      .eq('evolution_instance_id', instanceName)
+    if (data && data.length > 0) configRows = data
   }
-  
-  if (configRows.length > 1) {
-    console.error('Evolution Webhook: Multiple configs found for instance:', instanceName)
+
+  if (configRows.length === 0) {
+    const { data: fallbackRows } = await supabaseAdmin()
+      .from('whatsapp_config')
+      .select('*')
+      .eq('provider', 'evolution')
+    if (fallbackRows && fallbackRows.length > 0) {
+      configRows = fallbackRows
+    }
+  }
+
+  if (configRows.length === 0) {
+    console.error('Evolution Webhook: No config found for instance:', instanceName || 'unknown')
     return
   }
 
   const config = configRows[0]
-  const event = body.event
+  const rawEvent = String(body.event || body.type || body.action || '')
+  const event = rawEvent.toLowerCase()
 
-  // 1. Handle incoming / outgoing messages
-  if (event === 'messages.upsert' || event === 'MESSAGES_UPSERT') {
-    const msgData = Array.isArray(body.data) ? body.data[0] : body.data
+  // 1. Handle incoming / outgoing messages (upsert)
+  if (event.includes('upsert') || event === 'messages.upsert' || event === 'message.upsert') {
+    const rawData = body.data || body.response || body
+    let msgData = Array.isArray(rawData) ? rawData[0] : rawData
+    if (msgData?.messages && Array.isArray(msgData.messages)) {
+      msgData = msgData.messages[0]
+    }
+    if (msgData?.messageData) {
+      msgData = msgData.messageData
+    }
+
+    if (!msgData) return
 
     // Messages sent from the user's mobile phone (fromMe: true)
     if (msgData?.key?.fromMe === true) {
@@ -70,15 +88,16 @@ async function processEvolutionWebhook(body: any, instanceName: string) {
       return
     }
 
-    const remoteJid = msgData?.key?.remoteJid
+    const remoteJid = msgData?.key?.remoteJid || msgData?.remoteJid || msgData?.key?.participant
     if (!remoteJid || remoteJid.includes('@g.us')) return // Ignore groups for now
 
-    const phone = remoteJid.split('@')[0]
-    const pushName = msgData?.pushName || phone
-    const msgId = msgData?.key?.id
+    // Remove @s.whatsapp.net and device suffix like :12
+    const phone = remoteJid.split('@')[0].split(':')[0]
+    const pushName = msgData?.pushName || msgData?.verifiedBizName || phone
+    const msgId = msgData?.key?.id || msgData?.id || `evo-${Date.now()}`
     
-    // The actual text/media content is inside msgData.message
-    const messageContent = msgData?.message
+    // The actual text/media content is inside msgData.message or msgData
+    const messageContent = msgData?.message || msgData?.messageContent || msgData
 
     if (!messageContent) return
 
@@ -90,12 +109,19 @@ async function processEvolutionWebhook(body: any, instanceName: string) {
       type: 'text', // default
     }
 
-    if (messageContent.conversation || messageContent.extendedTextMessage) {
+    const textBody =
+      messageContent.conversation ||
+      messageContent.extendedTextMessage?.text ||
+      messageContent.text ||
+      msgData.body ||
+      msgData.text
+
+    if (textBody || messageContent.conversation || messageContent.extendedTextMessage) {
       metaMessage.type = 'text'
-      metaMessage.text = { body: messageContent.conversation || messageContent.extendedTextMessage?.text }
+      metaMessage.text = { body: textBody || '' }
     } else if (messageContent.imageMessage) {
       metaMessage.type = 'image'
-      const base64 = msgData.base64 || messageContent.imageMessage?.base64 // Evolution sometimes sends base64 alongside
+      const base64 = msgData.base64 || messageContent.imageMessage?.base64
       const url = base64 ? `data:${messageContent.imageMessage.mimetype};base64,${base64}` : messageContent.imageMessage.url
       metaMessage.image = { id: url, mime_type: messageContent.imageMessage.mimetype, caption: messageContent.imageMessage.caption }
     } else if (messageContent.videoMessage) {
@@ -116,7 +142,7 @@ async function processEvolutionWebhook(body: any, instanceName: string) {
     } else {
       // Fallback
       metaMessage.type = 'text'
-      metaMessage.text = { body: '[Mensagem não suportada]' }
+      metaMessage.text = { body: textBody || '[Mensagem não suportada]' }
     }
 
     const contact = { profile: { name: pushName }, wa_id: phone }

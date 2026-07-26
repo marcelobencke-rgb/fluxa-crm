@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Loader2, MessageSquare, Zap } from "lucide-react";
+import { useEffect, useState, useMemo } from "react";
+import { Loader2, MessageSquare, Zap, Search } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import {
@@ -32,9 +32,13 @@ export function QuickReplyPicker({
   const t = useTranslations("Inbox.composer");
   const [items, setItems] = useState<QuickReply[]>([]);
   const [loading, setLoading] = useState(false);
+  const [query, setQuery] = useState("");
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setQuery("");
+      return;
+    }
     let cancelled = false;
     setLoading(true);
     void (async () => {
@@ -53,24 +57,49 @@ export function QuickReplyPicker({
     };
   }, [open]);
 
+  const filteredItems = useMemo(() => {
+    if (!query.trim()) return items;
+    const q = query.toLowerCase();
+    return items.filter(
+      (item) =>
+        item.title.toLowerCase().includes(q) ||
+        (item.content_text && item.content_text.toLowerCase().includes(q)),
+    );
+  }, [items, query]);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{t("quickReplies")}</DialogTitle>
         </DialogHeader>
+
+        {items.length > 0 && (
+          <div className="relative mb-2">
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Buscar resposta rápida..."
+              className="w-full rounded-md border border-border bg-muted/50 pl-9 pr-3 py-2 text-sm placeholder-muted-foreground outline-none focus:border-primary"
+              autoFocus
+            />
+          </div>
+        )}
+
         <div className="max-h-[60vh] overflow-y-auto">
           {loading ? (
             <div className="flex justify-center py-8">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
-          ) : items.length === 0 ? (
+          ) : filteredItems.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">
-              {t("quickRepliesEmpty")}
+              {query ? "Nenhuma resposta encontrada" : t("quickRepliesEmpty")}
             </p>
           ) : (
             <ul className="flex flex-col gap-1">
-              {items.map((qr) => (
+              {filteredItems.map((qr) => (
                 <li key={qr.id}>
                   <button
                     type="button"

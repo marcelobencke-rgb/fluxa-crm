@@ -1,12 +1,9 @@
 import { NextResponse } from 'next/server'
 import { requireRole, toErrorResponse } from '@/lib/auth/account'
-import { supabaseAdmin } from '@/lib/automations/admin-client'
 import { validateInteractivePayload } from '@/lib/whatsapp/interactive'
 
 // Update / delete a single quick reply. Quick replies are account-
-// shared, so every mutation is scoped by `account_id` (the service-role
-// client bypasses the agent-gated RLS, so both the role check and the
-// account scope are enforced here).
+// shared, so every mutation is scoped by `account_id`.
 
 export async function PATCH(
   request: Request,
@@ -30,9 +27,6 @@ export async function PATCH(
     update.title = title
   }
 
-  // When `kind` is supplied (e.g. the editor flips Text ↔ Interactive), it
-  // drives which content column is authoritative and the other is cleared —
-  // otherwise a switched row keeps a stale payload the picker mis-routes on.
   if ('kind' in body) {
     if (body.kind !== 'text' && body.kind !== 'interactive') {
       return NextResponse.json({ error: 'kind must be "text" or "interactive"' }, { status: 400 })
@@ -55,7 +49,6 @@ export async function PATCH(
       update.interactive_payload = null
     }
   } else {
-    // No kind change — allow partial edits of whichever field the row uses.
     if ('content_text' in body) update.content_text = body.content_text ?? null
     if ('interactive_payload' in body) {
       if (body.interactive_payload != null) {
@@ -72,7 +65,7 @@ export async function PATCH(
     return NextResponse.json({ ok: true })
   }
 
-  const { error } = await supabaseAdmin()
+  const { error } = await ctx.supabase
     .from('quick_replies')
     .update(update)
     .eq('id', id)
@@ -93,7 +86,7 @@ export async function DELETE(
     return toErrorResponse(err)
   }
 
-  const { error } = await supabaseAdmin()
+  const { error } = await ctx.supabase
     .from('quick_replies')
     .delete()
     .eq('id', id)

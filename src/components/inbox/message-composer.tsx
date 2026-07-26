@@ -248,8 +248,13 @@ export function MessageComposer({
 
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-      setText(e.target.value);
+      const val = e.target.value;
+      setText(val);
       adjustHeight();
+
+      if (val === "/" || val.endsWith(" /") || val.endsWith("\n/")) {
+        setQuickReplyOpen(true);
+      }
     },
     [adjustHeight]
   );
@@ -364,11 +369,19 @@ export function MessageComposer({
         return;
       }
       const body = qr.content_text ?? "";
-      // Separate the snippet from any existing draft with a newline so the
-      // words don't run together ("Thanks" + "we'll…" → "Thankswe'll…").
-      setText((prev) =>
-        prev && !/\s$/.test(prev) ? `${prev}\n${body}` : `${prev}${body}`,
-      );
+      setText((prev) => {
+        let cleaned = prev;
+        if (cleaned === "/") {
+          cleaned = "";
+        } else if (cleaned.endsWith(" /")) {
+          cleaned = cleaned.slice(0, -2);
+        } else if (cleaned.endsWith("\n/")) {
+          cleaned = cleaned.slice(0, -2);
+        } else if (cleaned.endsWith("/")) {
+          cleaned = cleaned.slice(0, -1);
+        }
+        return cleaned && !/\s$/.test(cleaned) ? `${cleaned}\n${body}` : `${cleaned}${body}`;
+      });
       requestAnimationFrame(() => {
         adjustHeight();
         const el = textareaRef.current;

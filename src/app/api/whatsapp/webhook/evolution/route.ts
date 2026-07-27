@@ -136,6 +136,18 @@ async function processEvolutionWebhook(body: any, instanceName: string) {
     const messageContent =
       msgData?.message || msgData?.messageContent || msgData
 
+    // Extract reply context — Evolution sends this as contextInfo.stanzaId
+    // inside the message content (e.g. extendedTextMessage.contextInfo.stanzaId)
+    const contextInfo =
+      msgData?.contextInfo ||
+      messageContent?.contextInfo ||
+      messageContent?.extendedTextMessage?.contextInfo ||
+      messageContent?.imageMessage?.contextInfo ||
+      messageContent?.videoMessage?.contextInfo ||
+      messageContent?.audioMessage?.contextInfo ||
+      messageContent?.documentMessage?.contextInfo
+    const quotedStanzaId = contextInfo?.stanzaId || contextInfo?.quotedMessage?.key?.id || null
+
     // Transform Evolution payload into Meta-like format
     const metaMessage: any = {
       id: msgId,
@@ -144,6 +156,8 @@ async function processEvolutionWebhook(body: any, instanceName: string) {
         msgData.messageTimestamp || Math.floor(Date.now() / 1000),
       ),
       type: 'text', // default
+      // Reply context — processMessage uses message.context.id to resolve the parent
+      ...(quotedStanzaId ? { context: { id: quotedStanzaId } } : {}),
     }
 
     const textBody =
@@ -235,7 +249,11 @@ async function processEvolutionWebhook(body: any, instanceName: string) {
   // 2. Handle status updates
   else {
     console.log('[evo-webhook] → Status update branch (no message content detected)')
-    const rawData = body.data || body.response || body
+    console.log('[evo-webhook] Status payload:', JSON.stringify({
+      event,
+      bodyKeys: Object.keys(body),
+      dataKeys: rawData ? Object.keys(rawData) : null,
+    }))
     const updates = Array.isArray(rawData) ? rawData : [rawData]
     for (const update of updates) {
       const msgId =
@@ -249,6 +267,12 @@ async function processEvolutionWebhook(body: any, instanceName: string) {
         update?.status ??
         update?.statusNumber ??
         update?.statusText
+
+      console.log('[evo-webhook] Status update item:', JSON.stringify({
+        msgId: msgId || null,
+        rawStatus: rawStatus ?? null,
+        updateKeys: update ? Object.keys(update) : null,
+      }))
 
       if (!msgId || rawStatus === undefined || rawStatus === null) continue
 

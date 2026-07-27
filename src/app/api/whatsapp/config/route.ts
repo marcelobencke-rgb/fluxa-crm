@@ -154,7 +154,7 @@ export async function GET() {
                 url: webhookUrl,
                 webhook_by_events: false,
                 webhookBase64: true,
-                events: ['MESSAGES_UPSERT', 'MESSAGES_UPDATE']
+                events: ['MESSAGES_UPSERT', 'MESSAGES_UPDATE', 'SEND_MESSAGE', 'MESSAGES_SET']
               }
             })
           })

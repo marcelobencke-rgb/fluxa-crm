@@ -21,12 +21,15 @@ export interface SendMessageParams {
   text: string;
   previewUrl?: boolean;
   contextMessageId?: string;
+  /** true when the quoted message was sent by us (agent/bot). */
+  contextFromMe?: boolean;
 }
 
 export interface SendInteractiveParams {
   to: string;
   interactive: any; // Use the existing interactive payload types
   contextMessageId?: string;
+  contextFromMe?: boolean;
 }
 
 export interface SendMediaParams {
@@ -36,6 +39,7 @@ export interface SendMediaParams {
   type: 'image' | 'video' | 'audio' | 'document';
   caption?: string;
   contextMessageId?: string;
+  contextFromMe?: boolean;
 }
 
 export interface SendTemplateParams {
@@ -44,6 +48,7 @@ export interface SendTemplateParams {
   templateLanguage: string;
   templateMessageParams?: any;
   contextMessageId?: string;
+  contextFromMe?: boolean;
 }
 
 export interface IWhatsAppProvider {

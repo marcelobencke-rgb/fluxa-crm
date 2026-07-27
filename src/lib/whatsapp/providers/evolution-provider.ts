@@ -36,6 +36,8 @@ export class EvolutionProvider implements IWhatsAppProvider {
     if (params.contextMessageId) {
       payload.quoted = {
         key: {
+          remoteJid: `${params.to}@s.whatsapp.net`,
+          fromMe: params.contextFromMe ?? false,
           id: params.contextMessageId,
         },
       };
@@ -87,6 +89,7 @@ export class EvolutionProvider implements IWhatsAppProvider {
       to: params.to,
       text: fallbackText,
       contextMessageId: params.contextMessageId,
+      contextFromMe: params.contextFromMe,
     });
   }
 
@@ -105,6 +108,8 @@ export class EvolutionProvider implements IWhatsAppProvider {
     if (params.contextMessageId) {
       payload.quoted = {
         key: {
+          remoteJid: `${params.to}@s.whatsapp.net`,
+          fromMe: params.contextFromMe ?? false,
           id: params.contextMessageId,
         },
       };
@@ -135,6 +140,7 @@ export class EvolutionProvider implements IWhatsAppProvider {
       to: params.to,
       text: resolvedText,
       contextMessageId: params.contextMessageId,
+      contextFromMe: params.contextFromMe,
     });
   }
 }

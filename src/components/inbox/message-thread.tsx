@@ -422,24 +422,29 @@ export function MessageThread({
   }, [conversationId]);
 
   // Reset the server-side unread_count to 0 whenever an unread count
-  // surfaces on the active conversation — covers both (a) opening a
-  // conversation that had unread messages and (b) new messages arriving
-  // while the user is already viewing the thread (webhook server-bumps
-  // unread_count to N+1; the realtime UPDATE propagates it into the
-  // client, which re-runs this effect and flips it back to 0).
-  //
-  // Guarding on hasUnread prevents the eq-update loop: once unread_count
-  // is 0 the condition is false, so no further UPDATE is issued.
+  // surfaces on the active conversation AND the browser tab is focused.
   useEffect(() => {
     if (!conversationId || !hasUnread) return;
-    const supabase = createClient();
-    supabase
-      .from("conversations")
-      .update({ unread_count: 0 })
-      .eq("id", conversationId)
-      .then(({ error }) => {
-        if (error) console.error("Failed to reset unread_count:", error);
-      });
+
+    const resetUnread = () => {
+      if (typeof document !== "undefined" && !document.hasFocus()) return;
+      const supabase = createClient();
+      supabase
+        .from("conversations")
+        .update({ unread_count: 0 })
+        .eq("id", conversationId)
+        .then(({ error }) => {
+          if (error) console.error("Failed to reset unread_count:", error);
+        });
+    };
+
+    resetUnread();
+
+    const onFocus = () => resetUnread();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+    };
   }, [conversationId, hasUnread]);
 
   // Auto-scroll to bottom on new messages

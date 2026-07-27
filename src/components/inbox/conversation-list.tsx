@@ -9,7 +9,15 @@ import {
 } from "@/lib/inbox/conversations";
 import { cn } from "@/lib/utils";
 import type { Conversation, ConversationStatus, Tag } from "@/types";
-import { Search, ChevronDown, X } from "lucide-react";
+import { Search, ChevronDown, X, Volume2, VolumeX, Bell, BellOff } from "lucide-react";
+import {
+  playNotificationChime,
+  isSoundMuted,
+  setSoundMuted,
+  getBrowserNotificationPermission,
+  requestBrowserNotificationPermission,
+} from "@/lib/inbox/notifications";
+import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useTranslations } from "next-intl";
@@ -218,6 +226,33 @@ export function ConversationList({
     [onSelect]
   );
 
+  const [soundMutedState, setSoundMutedState] = useState(false);
+  const [notifPerm, setNotifPerm] = useState<NotificationPermission>("default");
+
+  useEffect(() => {
+    setSoundMutedState(isSoundMuted());
+    setNotifPerm(getBrowserNotificationPermission());
+  }, []);
+
+  const handleToggleSound = useCallback(() => {
+    const next = !soundMutedState;
+    setSoundMutedState(next);
+    setSoundMuted(next);
+    if (!next) {
+      playNotificationChime();
+    }
+  }, [soundMutedState]);
+
+  const handleRequestNotif = useCallback(async () => {
+    const perm = await requestBrowserNotificationPermission();
+    setNotifPerm(perm);
+    if (perm === "granted") {
+      toast.success("Notificações de trabalho ativadas!");
+    } else if (perm === "denied") {
+      toast.error("Notificações bloqueadas nas configurações do navegador.");
+    }
+  }, []);
+
   const activeFilter = FILTER_OPTIONS.find((o) => o.value === filter);
 
   return (
@@ -351,6 +386,43 @@ export function ConversationList({
               </DropdownMenuContent>
             </DropdownMenu>
           )}
+
+          {/* Sound & Desktop Notification controls */}
+          <div className="ml-auto flex items-center gap-0.5">
+            <button
+              type="button"
+              onClick={handleToggleSound}
+              title={soundMutedState ? "Ativar som de notificação" : "Mutar som de notificação"}
+              className={cn(
+                "flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors",
+                soundMutedState && "text-red-400"
+              )}
+            >
+              {soundMutedState ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
+            </button>
+
+            <button
+              type="button"
+              onClick={handleRequestNotif}
+              title={
+                notifPerm === "granted"
+                  ? "Notificações do navegador ativadas"
+                  : "Ativar notificações do navegador"
+              }
+              className={cn(
+                "flex h-7 w-7 items-center justify-center rounded-md transition-colors",
+                notifPerm === "granted"
+                  ? "text-primary hover:bg-muted"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              )}
+            >
+              {notifPerm === "granted" ? (
+                <Bell className="h-3.5 w-3.5" />
+              ) : (
+                <BellOff className="h-3.5 w-3.5" />
+              )}
+            </button>
+          </div>
         </div>
 
         {hasContactFilters && (

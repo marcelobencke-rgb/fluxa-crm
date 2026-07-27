@@ -17,6 +17,11 @@ import { toast } from "sonner";
 import { WifiOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+import {
+  playNotificationChime,
+  showDesktopNotification,
+} from "@/lib/inbox/notifications";
+
 // Remembers the agent's show/hide choice for the desktop contact panel
 // across reloads and sessions (device-scoped, like the theme prefs).
 const CONTACT_PANEL_STORAGE_KEY = "wacrm:inbox:contact-panel-open";
@@ -220,11 +225,28 @@ function InboxPageInner() {
       const newMsg = event.new;
 
       if (event.eventType === "INSERT") {
+        const isCustomer = newMsg.sender_type === "customer";
+        const isTabFocused = typeof document !== "undefined" && document.hasFocus();
+        const isActiveConv = activeConversation?.id === newMsg.conversation_id;
+
+        if (isCustomer) {
+          // Play audio notification chime
+          playNotificationChime();
+
+          // Show desktop notification if tab is in background or another chat is active
+          if (!isTabFocused || !isActiveConv) {
+            const targetConv = conversations.find((c) => c.id === newMsg.conversation_id);
+            const contactName =
+              targetConv?.contact?.name || targetConv?.contact?.phone || "Cliente";
+            showDesktopNotification(`Nova mensagem de ${contactName}`, {
+              body: newMsg.content_text || "[Mídia/Anexo]",
+              tag: newMsg.conversation_id,
+            });
+          }
+        }
+
         // Add to messages if it belongs to active conversation
-        if (
-          activeConversation &&
-          newMsg.conversation_id === activeConversation.id
-        ) {
+        if (isActiveConv) {
           setMessages((prev) => {
             // Avoid duplicates
             if (prev.some((m) => m.id === newMsg.id)) return prev;
@@ -236,11 +258,7 @@ function InboxPageInner() {
           });
         }
 
-        // Update conversation list preview. We need to know *synchronously*
-        // whether the conv is already in state to decide between patching
-        // the preview and triggering a hydrate — see the comment on
-        // knownConvIdsRef for why a closure flag inside the updater would
-        // always read false here.
+        // Update conversation list preview.
         if (knownConvIdsRef.current.has(newMsg.conversation_id)) {
           setConversations((prev) =>
             prev.map((c) =>
@@ -250,19 +268,16 @@ function InboxPageInner() {
                     last_message_text: newMsg.content_text ?? "",
                     last_message_at: newMsg.created_at,
                     unread_count:
-                      activeConversation?.id === newMsg.conversation_id
+                      isActiveConv && isTabFocused
                         ? 0
-                        : c.unread_count + 1,
+                        : isCustomer
+                          ? c.unread_count + 1
+                          : c.unread_count,
                   }
                 : c,
             ),
           );
         } else {
-          // First time we're seeing this conv: the conv-INSERT event
-          // hasn't landed yet, or was missed. Hydrate from the DB so
-          // the row surfaces with its `contact` joined; the conv-UPDATE
-          // event the webhook emits right after the message INSERT will
-          // converge state when it arrives.
           hydrateConversation(newMsg.conversation_id);
         }
       }
@@ -274,7 +289,7 @@ function InboxPageInner() {
         );
       }
     },
-    [activeConversation, hydrateConversation]
+    [activeConversation, conversations, hydrateConversation]
   );
 
   // Handle realtime conversation events
@@ -287,11 +302,6 @@ function InboxPageInner() {
       const conv = event.new;
 
       if (event.eventType === "INSERT") {
-        // Prepend immediately for snappy UX so the new conv shows in the
-        // list right away, then hydrate to fill in the `contact` join
-        // (realtime payloads never include joins). Skip both if we
-        // already have the row — that shouldn't happen normally, but
-        // out-of-order delivery would have us prepending a duplicate.
         if (!knownConvIdsRef.current.has(conv.id)) {
           setConversations((prev) => {
             if (prev.some((c) => c.id === conv.id)) return prev;
@@ -303,11 +313,7 @@ function InboxPageInner() {
 
       if (event.eventType === "UPDATE") {
         if (knownConvIdsRef.current.has(conv.id)) {
-          // If this UPDATE is for the conv the user is currently viewing,
-          // suppress the incoming unread_count — the user is reading it
-          // RIGHT NOW, so any positive value would just flicker the badge
-          // back on for the ~100ms it takes for the reset effect's server
-          // UPDATE to round-trip. Non-active convs take the value as-is.
+          const isTabFocused = typeof document !== "undefined" && document.hasFocus();
           const isActive = activeConversation?.id === conv.id;
           setConversations((prev) =>
             prev.map((c) =>
@@ -315,16 +321,12 @@ function InboxPageInner() {
                 ? {
                     ...c,
                     ...conv,
-                    unread_count: isActive ? 0 : conv.unread_count,
+                    unread_count: isActive && isTabFocused ? 0 : conv.unread_count,
                   }
                 : c,
             ),
           );
         } else {
-          // UPDATE arrived before the INSERT (or after a missed INSERT)
-          // — fetch the row so it surfaces with its contact joined. The
-          // patch contained in `conv` will already be reflected in what
-          // the hydrate fetch returns.
           hydrateConversation(conv.id);
         }
 

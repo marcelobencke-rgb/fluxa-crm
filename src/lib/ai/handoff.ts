@@ -29,15 +29,15 @@ export function buildHandoffSummary(args: {
 
   const replies =
     replyCount === 0
-      ? 'without replying'
-      : `after ${replyCount} ${replyCount === 1 ? 'reply' : 'replies'}`
+      ? 'sem responder'
+      : `após ${replyCount} ${replyCount === 1 ? 'resposta' : 'respostas'}`
 
-  const base = `🤖 AI agent handed off ${replies}.`
+  const base = `🤖 O agente de IA encaminhou para um atendente ${replies}.`
 
   if (!lastCustomer) return base
 
   const quote = truncate(lastCustomer.content.trim(), MAX_QUOTE_LEN)
-  return `${base} Last customer message: “${quote}”`
+  return `${base} Última mensagem do cliente: “${quote}”`
 }
 
 function truncate(text: string, max: number): string {

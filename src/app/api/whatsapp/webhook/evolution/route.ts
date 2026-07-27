@@ -39,13 +39,11 @@ export async function POST(request: Request) {
     topKeys: Object.keys(body),
   }))
 
-  after(async () => {
-    try {
-      await processEvolutionWebhook(body, instanceName)
-    } catch (error) {
-      console.error('Error processing Evolution webhook:', error)
-    }
-  })
+  try {
+    await processEvolutionWebhook(body, instanceName)
+  } catch (error) {
+    console.error('Error processing Evolution webhook:', error)
+  }
 
   return NextResponse.json({ status: 'received' }, { status: 200 })
 }

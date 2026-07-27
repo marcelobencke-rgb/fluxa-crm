@@ -232,6 +232,12 @@ interface ExecuteArgs {
   startPosition: number
   logId: string | null
   triggerEvent: string
+  contact?: {
+    name?: string | null
+    phone?: string | null
+    email?: string | null
+    company?: string | null
+  } | null
 }
 
 async function executeStepsFrom(args: ExecuteArgs): Promise<void> {
@@ -355,7 +361,7 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
     case 'send_message': {
       const cfg = step.step_config as SendMessageStepConfig
       if (!args.contactId) throw new Error('send_message needs a contact')
-      const text = interpolate(cfg.text, args)
+      const text = await interpolate(cfg.text, args)
       if (!text.trim()) throw new Error('send_message has empty text')
       const conversationId = await resolveConversationId(args)
       const { whatsapp_message_id } = await engineSendText({
@@ -502,7 +508,7 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
       if (!args.contactId) throw new Error('update_contact_field needs a contact')
       // Resolve workflow variables ({{ vars.* }}, {{ message.text }}) so custom
       // values can be populated dynamically from the triggering context.
-      const value = interpolate(cfg.value, args)
+      const value = await interpolate(cfg.value, args)
 
       // Custom fields are encoded as `custom:<custom_field_id>`; anything else
       // is a built-in contact column.
@@ -569,7 +575,7 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
         pipeline_id: cfg.pipeline_id,
         stage_id: cfg.stage_id,
         contact_id: args.contactId,
-        title: interpolate(cfg.title ?? 'Deal', args),
+        title: await interpolate(cfg.title ?? 'Deal', args),
         value: cfg.value ?? 0,
         currency: acct?.default_currency ?? 'USD',
         status: 'open',
@@ -611,7 +617,7 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
       if (!(await isDeliverableUrl(cfg.url))) {
         throw new Error('send_webhook: destination not allowed')
       }
-      const body = cfg.body_template ? interpolate(cfg.body_template, args) : JSON.stringify(args.context)
+      const body = cfg.body_template ? await interpolate(cfg.body_template, args) : JSON.stringify(args.context)
       const res = await fetch(cfg.url, {
         method: 'POST',
         headers: { 'content-type': 'application/json', ...(cfg.headers ?? {}) },
@@ -763,13 +769,47 @@ function waitMs(cfg: WaitStepConfig): number {
   return Math.max(1_000, cfg.amount * unitMs)
 }
 
-function interpolate(s: string, args: ExecuteArgs): string {
-  return s.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_, key) => {
+async function getContactInfo(args: ExecuteArgs) {
+  if (args.contact !== undefined) return args.contact
+  if (!args.contactId) return null
+  const db = supabaseAdmin()
+  const { data } = await db
+    .from('contacts')
+    .select('name, phone, email, company')
+    .eq('id', args.contactId)
+    .maybeSingle()
+  args.contact = data
+  return data
+}
+
+async function interpolate(s: string, args: ExecuteArgs): Promise<string> {
+  if (!s) return ''
+  const contact = await getContactInfo(args)
+  const contactName = contact?.name || contact?.phone || ''
+  const contactPhone = contact?.phone || ''
+  const contactEmail = contact?.email || ''
+  const contactCompany = contact?.company || ''
+  const messageText = String(args.context.message_text ?? '')
+
+  let result = s
+    .replace(/(\$nome_contato|\$nome_do_contato|\$nome|\{\{\s*contact\.name\s*\}\}|\{\{\s*nome_contato\s*\}\}|\{\{\s*nome\s*\}\})/gi, contactName)
+    .replace(/(\$telefone_contato|\$telefone|\$phone|\{\{\s*contact\.phone\s*\}\}|\{\{\s*telefone_contato\s*\}\}|\{\{\s*telefone\s*\}\})/gi, contactPhone)
+    .replace(/(\$email_contato|\$email|\{\{\s*contact\.email\s*\}\}|\{\{\s*email_contato\s*\}\}|\{\{\s*email\s*\}\})/gi, contactEmail)
+    .replace(/(\$empresa_contato|\$empresa|\{\{\s*contact\.company\s*\}\}|\{\{\s*empresa_contato\s*\}\}|\{\{\s*empresa\s*\}\})/gi, contactCompany)
+    .replace(/(\$mensagem|\{\{\s*message\.text\s*\}\}|\{\{\s*mensagem\s*\}\})/gi, messageText)
+
+  result = result.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_, key) => {
     const [ns, prop] = String(key).split('.')
-    if (ns === 'message' && prop === 'text') return String(args.context.message_text ?? '')
+    if (ns === 'message' && prop === 'text') return messageText
+    if (ns === 'contact' && prop === 'name') return contactName
+    if (ns === 'contact' && prop === 'phone') return contactPhone
+    if (ns === 'contact' && prop === 'email') return contactEmail
+    if (ns === 'contact' && prop === 'company') return contactCompany
     if (ns === 'vars' && prop) return String(args.context.vars?.[prop] ?? '')
     return ''
   })
+
+  return result
 }
 
 async function appendResults(

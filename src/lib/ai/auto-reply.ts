@@ -49,16 +49,15 @@ export async function dispatchInboundToAiReply(
     const db = supabaseAdmin()
 
     const config = await loadAiConfig(db, accountId)
-    if (!config || !config.autoReplyEnabled) return
+    if (!config) {
+      console.log('[ai auto-reply] early exit: no config loaded')
+      return
+    }
+    if (!config.autoReplyEnabled) {
+      console.log('[ai auto-reply] early exit: autoReplyEnabled is false')
+      return
+    }
 
-    // Deterministic, user-configured responders win over the LLM — the
-    // caller already excludes messages a Flow consumed. Message-level
-    // automations (`new_message_received` / `keyword_match`) are
-    // dispatched independently for this same inbound and may send their
-    // own reply, so if the account has any active one we stand down to
-    // avoid double-texting the customer. (Relationship triggers like
-    // `first_inbound_message` don't count — they're not per-message
-    // auto-responders.)
     const { data: autoResponders } = await db
       .from('automations')
       .select('id')
@@ -66,22 +65,38 @@ export async function dispatchInboundToAiReply(
       .eq('is_active', true)
       .in('trigger_type', ['new_message_received', 'keyword_match'])
       .limit(1)
-    if (autoResponders && autoResponders.length > 0) return
+    if (autoResponders && autoResponders.length > 0) {
+      console.log('[ai auto-reply] early exit: active automation responder exists')
+      return
+    }
 
     const { data: conv, error: convErr } = await db
       .from('conversations')
       .select('assigned_agent_id, ai_autoreply_disabled, ai_reply_count')
       .eq('id', conversationId)
       .maybeSingle()
-    if (convErr || !conv) return
-    if (conv.assigned_agent_id) return // a human owns this thread
-    if (conv.ai_autoreply_disabled) return // handed off / turned off here
-    // Cheap early-out; the authoritative cap check is the atomic claim
-    // below (this read can race a concurrent inbound).
-    if (conv.ai_reply_count >= config.autoReplyMaxPerConversation) return
+    if (convErr || !conv) {
+      console.log('[ai auto-reply] early exit: conversation fetch error or missing', convErr)
+      return
+    }
+    if (conv.assigned_agent_id) {
+      console.log('[ai auto-reply] early exit: conversation has assigned_agent_id:', conv.assigned_agent_id)
+      return
+    }
+    if (conv.ai_autoreply_disabled) {
+      console.log('[ai auto-reply] early exit: ai_autoreply_disabled is true')
+      return
+    }
+    if (conv.ai_reply_count >= config.autoReplyMaxPerConversation) {
+      console.log('[ai auto-reply] early exit: max replies reached:', conv.ai_reply_count, '>=', config.autoReplyMaxPerConversation)
+      return
+    }
 
     const messages = await buildConversationContext(db, conversationId)
-    if (messages.length === 0) return
+    if (messages.length === 0) {
+      console.log('[ai auto-reply] early exit: buildConversationContext returned 0 text messages')
+      return
+    }
 
     // Account-wide throttle on the shared BYO key. The per-conversation
     // cap bounds one thread; this bounds a burst across many threads (a
@@ -171,13 +186,16 @@ export async function dispatchInboundToAiReply(
     })
 
     if (isHandoff || !replyText) {
-      // The model can't (or shouldn't) answer — stop auto-replying on
-      // this thread and hand it to a human. We (a) pause the bot here
-      // (sticky until re-enabled), (b) route the conversation to the
-      // configured handoff agent — null leaves it in the shared queue —
-      // and (c) leave a short internal note so whoever picks it up has
-      // context. Assigning fires the `on_conversation_assigned` trigger,
-      // which notifies the agent.
+      if (replyText) {
+        await engineSendText({
+          accountId,
+          userId: configOwnerUserId,
+          conversationId,
+          contactId,
+          text: replyText,
+          aiGenerated: true,
+        })
+      }
       const summary = buildHandoffSummary({
         messages,
         replyCount: conv.ai_reply_count ?? 0,
@@ -186,8 +204,6 @@ export async function dispatchInboundToAiReply(
         ai_autoreply_disabled: true,
         ai_handoff_summary: summary,
       }
-      // Only set the assignee when a target is configured AND the thread
-      // isn't already owned — never stomp an existing human assignment.
       if (config.handoffAgentId && !conv.assigned_agent_id) {
         update.assigned_agent_id = config.handoffAgentId
       }

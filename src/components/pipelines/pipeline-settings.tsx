@@ -80,6 +80,8 @@ export function PipelineSettings({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  const [deletedStageIds, setDeletedStageIds] = useState<string[]>([]);
+
   // Reset form state when the dialog opens or its prop inputs change
   // — legitimate prop-driven sync.
   /* eslint-disable react-hooks/set-state-in-effect */
@@ -87,6 +89,7 @@ export function PipelineSettings({
     if (!open) return;
     setName(pipeline.name);
     setLocalStages([...stages].sort((a, b) => a.position - b.position));
+    setDeletedStageIds([]);
     setShowDeleteConfirm(false);
   }, [open, pipeline, stages]);
   /* eslint-enable react-hooks/set-state-in-effect */
@@ -105,15 +108,26 @@ export function PipelineSettings({
   }
 
   async function handleSave() {
+    if (saving) return;
     setSaving(true);
 
-    // One upsert for all stages — batches N stage writes into a single
-    // round-trip. Previous implementation did N sequential UPDATEs which
-    // latency-scaled linearly with stage count.
+    // Delete removed stages from DB
+    if (deletedStageIds.length > 0) {
+      const { error: delError } = await supabase
+        .from("pipeline_stages")
+        .delete()
+        .in("id", deletedStageIds);
+
+      if (delError) {
+        console.error("Failed to delete removed stages:", delError.message);
+      }
+    }
+
+    // One upsert for all current local stages
     const stageRows = localStages.map((s, i) => ({
       id: s.id,
-      pipeline_id: s.pipeline_id,
-      name: s.name,
+      pipeline_id: pipeline.id,
+      name: s.name.trim(),
       color: s.color,
       position: i,
     }));
@@ -130,33 +144,37 @@ export function PipelineSettings({
 
     if (renameRes.error || stagesRes.error) {
       toast.error(t("toastFailedSave"));
+      console.error("Save error:", renameRes.error || stagesRes.error);
       return;
     }
 
+    setDeletedStageIds([]);
     onOpenChange(false);
     onPipelinesChanged();
     onStagesChanged();
     toast.success(t("toastSaved"));
   }
 
-  async function handleAddStage() {
+  function handleAddStage() {
     const trimmed = newStageName.trim();
     if (!trimmed) return;
-    const { data, error } = await supabase
-      .from("pipeline_stages")
-      .insert({
-        pipeline_id: pipeline.id,
-        name: trimmed,
-        color: newStageColor,
-        position: localStages.length,
-      })
-      .select()
-      .single();
-    if (error || !data) {
+
+    // Prevent duplicate stage name additions
+    if (localStages.some((s) => s.name.toLowerCase() === trimmed.toLowerCase())) {
       toast.error(t("toastFailedAddStage"));
       return;
     }
-    setLocalStages([...localStages, data as PipelineStage]);
+
+    const newStage: PipelineStage = {
+      id: crypto.randomUUID(),
+      pipeline_id: pipeline.id,
+      name: trimmed,
+      color: newStageColor,
+      position: localStages.length,
+      created_at: new Date().toISOString(),
+    };
+
+    setLocalStages((prev) => [...prev, newStage]);
     setNewStageName("");
     setNewStageColor(STAGE_COLORS[(localStages.length + 1) % STAGE_COLORS.length]);
   }
@@ -171,15 +189,12 @@ export function PipelineSettings({
       toast.error(t("toastMoveOrDeleteDeals"));
       return;
     }
-    const { error } = await supabase
-      .from("pipeline_stages")
-      .delete()
-      .eq("id", stageId);
-    if (error) {
-      toast.error(t("toastFailedDeleteStage"));
-      return;
+
+    // Mark existing stages for deletion upon save
+    if (!stageId.includes("-") || stages.some((s) => s.id === stageId)) {
+      setDeletedStageIds((prev) => [...prev, stageId]);
     }
-    setLocalStages(localStages.filter((s) => s.id !== stageId));
+    setLocalStages((prev) => prev.filter((s) => s.id !== stageId));
   }
 
   async function handleDeletePipeline() {

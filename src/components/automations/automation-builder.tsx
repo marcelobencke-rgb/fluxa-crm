@@ -1443,8 +1443,12 @@ function StepEditor({
             <Input
               value={(cfg.title as string) ?? ""}
               onChange={(e) => set({ title: e.target.value })}
+              placeholder="Ex: $nome_contato - Novo Lead"
               className="bg-muted text-foreground"
             />
+            <p className="mt-1.5 text-[11px] text-muted-foreground leading-relaxed">
+              Variáveis disponíveis: <code className="rounded bg-primary/10 px-1 py-0.5 text-primary font-medium">$nome_contato</code> <code className="rounded bg-primary/10 px-1 py-0.5 text-primary font-medium">$telefone_contato</code> <code className="rounded bg-primary/10 px-1 py-0.5 text-primary font-medium">$email_contato</code> <code className="rounded bg-primary/10 px-1 py-0.5 text-primary font-medium">$empresa_contato</code> <code className="rounded bg-primary/10 px-1 py-0.5 text-primary font-medium">$mensagem</code>
+            </p>
           </FieldBlock>
           <FieldBlock label={t("config.valueLabel")}>
             <Input

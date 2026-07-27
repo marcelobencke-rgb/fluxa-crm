@@ -104,8 +104,12 @@ export async function POST(request: Request) {
     }
   }
 
-  const admin = supabaseAdmin()
-  const { data: automation, error: insertErr } = await admin
+  const isServiceRoleValid =
+    process.env.SUPABASE_SERVICE_ROLE_KEY &&
+    process.env.SUPABASE_SERVICE_ROLE_KEY !== process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  const dbClient = isServiceRoleValid ? supabaseAdmin() : supabase
+
+  const { data: automation, error: insertErr } = await dbClient
     .from('automations')
     .insert({
       user_id: user.id,
@@ -127,7 +131,7 @@ export async function POST(request: Request) {
   }
 
   if (effectiveSteps && effectiveSteps.length > 0) {
-    const err = await insertSteps(automation.id, effectiveSteps)
+    const err = await insertSteps(automation.id, effectiveSteps, dbClient)
     if (err) return NextResponse.json({ error: err }, { status: 500 })
   }
 

@@ -1693,6 +1693,36 @@
       "reindex": "Reindexar",
       "reindexTooltip": "Reincorporar todos os documentos (ex: após adicionar uma chave de embeddings)",
       "loading": "Carregando…"
+    },
+    "aiPlayground": {
+      "subtitle": "— teste respostas como se você fosse um cliente",
+      "reset": "Resetar",
+      "notConfigured": "Nenhum agente configurado ainda — conclua a Configuração primeiro.",
+      "couldNotReply": "Não foi possível obter uma resposta.",
+      "couldNotReach": "Não foi possível conectar ao agente.",
+      "emptyNotice": "Envie uma mensagem para ver como seu agente responderia.",
+      "emptyNoticeHint": "Ele utiliza sua base de conhecimento e se comporta exatamente como o bot de resposta automática — incluindo a transferência para humano.",
+      "notSetUp": "Ainda não configurou? Ir para Configuração",
+      "handoffBadge": "Transferiria para um atendente humano aqui",
+      "thinking": "Pensando…",
+      "placeholder": "Digite uma mensagem do cliente…"
+    },
+    "aiUsage": {
+      "loadFailed": "Falha ao carregar o uso",
+      "title": "Uso de tokens",
+      "description": "Tokens consumidos na chave do seu provedor por rascunhos e pelo bot de resposta automática. Somente contagens — nenhum conteúdo de mensagem é armazenado aqui.",
+      "lastDays": "Últimos {days} dias",
+      "noUsage": "Nenhum uso de IA nos últimos {days} dias.",
+      "noUsageHint": "Este painel será preenchido à medida que o assistente gerar rascunhos e respostas automáticas.",
+      "totalTokens": "Total de tokens",
+      "llmCalls": "Chamadas à IA",
+      "autoReply": "Resposta automática",
+      "drafts": "Rascunhos",
+      "tokensPerDay": "Tokens por dia",
+      "byModel": "Por modelo",
+      "call": "chamada",
+      "calls": "chamadas",
+      "partialWindow": "Exibindo janela parcial — o volume de uso foi alto e apenas os registros mais recentes foram resumidos aqui."
     }
   },
   "Notifications": {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -31,6 +31,13 @@ import {
   DollarSign,
   Loader2,
 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
 
@@ -245,6 +252,32 @@ export function DealForm({
     onSaved();
   }
 
+  const selectedContact = contacts.find((c) => c.id === contactId);
+  const selectedContactLabel = selectedContact
+    ? (selectedContact.name &&
+       selectedContact.name !== selectedContact.phone &&
+       selectedContact.name.replace(/\D/g, "") !== selectedContact.phone.replace(/\D/g, "")
+        ? `${selectedContact.name} (${selectedContact.phone})`
+        : selectedContact.phone || selectedContact.name)
+    : t("selectContact");
+
+  const uniqueStages = useMemo(() => {
+    const seen = new Set<string>();
+    return stages.filter((s) => {
+      if (seen.has(s.id)) return false;
+      seen.add(s.id);
+      return true;
+    });
+  }, [stages]);
+
+  const selectedStage = uniqueStages.find((s) => s.id === stageId);
+  const selectedStageLabel = selectedStage ? selectedStage.name : t("stage");
+
+  const selectedProfile = profiles.find((p) => p.id === assignedTo);
+  const selectedAssignedLabel = selectedProfile
+    ? (selectedProfile.full_name || selectedProfile.email)
+    : t("unassigned");
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
@@ -271,18 +304,33 @@ export function DealForm({
 
             <div className="grid gap-2">
               <Label className="text-muted-foreground">{t("contact")}</Label>
-              <select
-                value={contactId}
-                onChange={(e) => setContactId(e.target.value)}
-                className="h-9 w-full rounded-lg border border-border bg-muted px-2.5 text-sm text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+              <Select
+                value={contactId || "none"}
+                onValueChange={(val) => setContactId(val === "none" || !val ? "" : val)}
               >
-                <option value="">{t("selectContact")}</option>
-                {contacts.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name || c.phone}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger className="w-full bg-muted border-border text-foreground">
+                  <SelectValue placeholder={t("selectContact")}>
+                    {selectedContactLabel}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">{t("selectContact")}</SelectItem>
+                  {contacts.map((c) => {
+                    const hasCustomName =
+                      c.name &&
+                      c.name !== c.phone &&
+                      c.name.replace(/\D/g, "") !== c.phone.replace(/\D/g, "");
+                    const label = hasCustomName
+                      ? `${c.name} (${c.phone})`
+                      : c.phone || c.name;
+                    return (
+                      <SelectItem key={c.id} value={c.id}>
+                        {label}
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
 
               {linkedConversation && (
                 <Link
@@ -311,17 +359,21 @@ export function DealForm({
               </div>
               <div className="grid gap-2">
                 <Label className="text-muted-foreground">{t("currency")}</Label>
-                <select
+                <Select
                   value={currency}
-                  onChange={(e) => setCurrency(e.target.value)}
-                  className="h-9 w-full rounded-lg border border-border bg-muted px-2.5 text-sm text-foreground outline-none focus:border-primary"
+                  onValueChange={(val) => val && setCurrency(val)}
                 >
-                  {CURRENCIES.map((c) => (
-                    <option key={c.code} value={c.code}>
-                      {c.code}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger className="w-full bg-muted border-border text-foreground">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CURRENCIES.map((c) => (
+                      <SelectItem key={c.code} value={c.code}>
+                        {c.code}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
@@ -337,33 +389,45 @@ export function DealForm({
 
             <div className="grid gap-2">
               <Label className="text-muted-foreground">{t("stage")}</Label>
-              <select
+              <Select
                 value={stageId}
-                onChange={(e) => setStageId(e.target.value)}
-                className="h-9 w-full rounded-lg border border-border bg-muted px-2.5 text-sm text-foreground outline-none focus:border-primary"
+                onValueChange={(val) => val && setStageId(val)}
               >
-                {stages.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger className="w-full bg-muted border-border text-foreground">
+                  <SelectValue placeholder={t("stage")}>
+                    {selectedStageLabel}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {uniqueStages.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="grid gap-2">
               <Label className="text-muted-foreground">{t("assignedTo")}</Label>
-              <select
-                value={assignedTo}
-                onChange={(e) => setAssignedTo(e.target.value)}
-                className="h-9 w-full rounded-lg border border-border bg-muted px-2.5 text-sm text-foreground outline-none focus:border-primary"
+              <Select
+                value={assignedTo || "unassigned"}
+                onValueChange={(val) => setAssignedTo(val === "unassigned" || !val ? "" : val)}
               >
-                <option value="">{t("unassigned")}</option>
-                {profiles.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.full_name || p.email}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger className="w-full bg-muted border-border text-foreground">
+                  <SelectValue placeholder={t("unassigned")}>
+                    {selectedAssignedLabel}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="unassigned">{t("unassigned")}</SelectItem>
+                  {profiles.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.full_name || p.email}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="grid gap-2">

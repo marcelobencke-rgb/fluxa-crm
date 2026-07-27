@@ -101,6 +101,29 @@ export async function engineSendInteractive(
   })
 }
 
+import type { IWhatsAppProvider } from '@/lib/whatsapp/providers/types'
+import { MetaProvider } from '@/lib/whatsapp/providers/meta-provider'
+import { EvolutionProvider } from '@/lib/whatsapp/providers/evolution-provider'
+
+function getWhatsAppProvider(config: any): IWhatsAppProvider {
+  if (config.provider === 'evolution') {
+    return new EvolutionProvider(
+      config.evolution_api_url,
+      config.evolution_api_key,
+      config.evolution_instance_id,
+    )
+  }
+  let accessToken = ''
+  if (config.access_token) {
+    try {
+      accessToken = decrypt(config.access_token)
+    } catch {
+      // ignore
+    }
+  }
+  return new MetaProvider(config.phone_number_id, accessToken)
+}
+
 type SendInput =
   | (SendTextArgs & { kind: 'text' })
   | (SendTemplateArgs & { kind: 'template' })
@@ -140,23 +163,19 @@ async function sendViaMeta(input: SendInput): Promise<{ whatsapp_message_id: str
     throw new Error('WhatsApp not configured for this account')
   }
 
-  const accessToken = decrypt(config.access_token)
+  const provider = getWhatsAppProvider(config)
 
   const attempt = async (phone: string): Promise<string> => {
     if (input.kind === 'template') {
-      const r = await sendTemplateMessage({
-        phoneNumberId: config.phone_number_id,
-        accessToken,
+      const r = await provider.sendTemplate({
         to: phone,
         templateName: input.templateName,
-        language: input.language,
-        params: input.params,
+        templateLanguage: input.language || 'en_US',
+        templateMessageParams: input.params,
       })
       return r.messageId
     }
-    const r = await sendTextMessage({
-      phoneNumberId: config.phone_number_id,
-      accessToken,
+    const r = await provider.sendMessage({
       to: phone,
       text: input.text,
     })

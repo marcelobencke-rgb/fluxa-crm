@@ -48,6 +48,46 @@ const KEY_PLACEHOLDER: Record<AiProvider, string> = {
   anthropic: 'sk-ant-...',
 };
 
+const MODEL_OPTIONS: Record<
+  AiProvider,
+  { value: string; label: string; desc?: string }[]
+> = {
+  openai: [
+    {
+      value: 'gpt-4o-mini',
+      label: 'gpt-4o-mini (Recomendado)',
+      desc: 'Mais rápido, excelente para WhatsApp e de baixo custo',
+    },
+    {
+      value: 'gpt-4o',
+      label: 'gpt-4o',
+      desc: 'Mais inteligente para raciocínio complexo',
+    },
+    {
+      value: 'gpt-4-turbo',
+      label: 'gpt-4-turbo',
+      desc: 'Modelo Turbo avançado',
+    },
+    {
+      value: 'gpt-3.5-turbo',
+      label: 'gpt-3.5-turbo',
+      desc: 'Modelo clássico super veloz',
+    },
+  ],
+  anthropic: [
+    {
+      value: 'claude-3-5-haiku-20241022',
+      label: 'claude-3-5-haiku (Recomendado)',
+      desc: 'Rápido e econômico para chats',
+    },
+    {
+      value: 'claude-3-5-sonnet-20241022',
+      label: 'claude-3-5-sonnet',
+      desc: 'Respostas extremamente precisas e detalhadas',
+    },
+  ],
+};
+
 export function AiConfig() {
   const { accountId, accountRole, profileLoading } = useAuth();
   const canEdit = accountRole ? canEditSettings(accountRole) : false;
@@ -287,13 +327,32 @@ export function AiConfig() {
 
               <div className="space-y-2">
                 <Label htmlFor="ai-model">{t('model')}</Label>
-                <Input
-                  id="ai-model"
+                <Select
                   value={model}
-                  onChange={(e) => setModel(e.target.value)}
-                  placeholder={AI_PROVIDER_DEFAULT_MODEL[provider]}
+                  onValueChange={(v) => setModel(v || AI_PROVIDER_DEFAULT_MODEL[provider])}
                   disabled={disabled}
-                />
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder={AI_PROVIDER_DEFAULT_MODEL[provider]} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(MODEL_OPTIONS[provider] ?? []).map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        <div className="flex flex-col text-left">
+                          <span className="font-medium">{opt.label}</span>
+                          {opt.desc && (
+                            <span className="text-xs text-muted-foreground">{opt.desc}</span>
+                          )}
+                        </div>
+                      </SelectItem>
+                    ))}
+                    {model && !(MODEL_OPTIONS[provider] ?? []).some((o) => o.value === model) && (
+                      <SelectItem value={model}>
+                        <span className="font-medium">{model}</span>
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 

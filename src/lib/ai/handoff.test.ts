@@ -12,7 +12,7 @@ describe('buildHandoffSummary', () => {
       replyCount: 2,
     })
     expect(summary).toBe(
-      '🤖 AI agent handed off after 2 replies. Last customer message: “I want a refund”',
+      '🤖 O agente de IA encaminhou para um atendente após 2 respostas. Última mensagem do cliente: “I want a refund”',
     )
   })
 
@@ -21,7 +21,7 @@ describe('buildHandoffSummary', () => {
       messages: [{ role: 'user', content: 'help' }],
       replyCount: 1,
     })
-    expect(summary).toContain('after 1 reply.')
+    expect(summary).toContain('após 1 resposta.')
   })
 
   it('says "without replying" when the bot bailed on the first inbound', () => {
@@ -29,7 +29,7 @@ describe('buildHandoffSummary', () => {
       messages: [{ role: 'user', content: 'agent please' }],
       replyCount: 0,
     })
-    expect(summary).toContain('handed off without replying.')
+    expect(summary).toContain('encaminhou para um atendente sem responder.')
     expect(summary).toContain('“agent please”')
   })
 
@@ -53,7 +53,7 @@ describe('buildHandoffSummary', () => {
     })
     expect(summary).toContain('…')
     // 160-char cap on the quote; the whole note stays well under 250.
-    expect(summary.length).toBeLessThan(250)
+    expect(summary.length).toBeLessThan(300)
   })
 
   it('degrades gracefully when there is no customer message', () => {
@@ -61,6 +61,6 @@ describe('buildHandoffSummary', () => {
       messages: [{ role: 'assistant', content: 'greeting' }],
       replyCount: 0,
     })
-    expect(summary).toBe('🤖 AI agent handed off without replying.')
+    expect(summary).toBe('🤖 O agente de IA encaminhou para um atendente sem responder.')
   })
 })

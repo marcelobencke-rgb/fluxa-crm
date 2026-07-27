@@ -355,11 +355,17 @@ export function Step2SelectAudience({
               <select
                 value={audience.customField?.fieldId ?? ''}
                 onChange={(e) => updateCustomField({ fieldId: e.target.value })}
-                className="h-9 rounded-lg border border-border bg-muted px-2.5 text-sm text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                className="h-9 rounded-lg border border-border bg-muted px-2.5 text-sm text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary dark:bg-zinc-900 dark:text-zinc-100 dark:border-zinc-800 cursor-pointer"
               >
-                <option value="">{t('selectAudience.selectField')}</option>
+                <option value="" className="bg-popover text-popover-foreground dark:bg-zinc-900 dark:text-zinc-100 py-1">
+                  {t('selectAudience.selectField')}
+                </option>
                 {customFields.map((f) => (
-                  <option key={f.id} value={f.id}>
+                  <option
+                    key={f.id}
+                    value={f.id}
+                    className="bg-popover text-popover-foreground dark:bg-zinc-900 dark:text-zinc-100 py-1"
+                  >
                     {f.field_name}
                   </option>
                 ))}
@@ -371,10 +377,14 @@ export function Step2SelectAudience({
                     operator: e.target.value as CustomFieldOperator,
                   })
                 }
-                className="h-9 rounded-lg border border-border bg-muted px-2.5 text-sm text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                className="h-9 rounded-lg border border-border bg-muted px-2.5 text-sm text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary dark:bg-zinc-900 dark:text-zinc-100 dark:border-zinc-800 cursor-pointer"
               >
                 {OPERATOR_OPTIONS.map((op: { value: CustomFieldOperator; label: string }) => (
-                  <option key={op.value} value={op.value}>
+                  <option
+                    key={op.value}
+                    value={op.value}
+                    className="bg-popover text-popover-foreground dark:bg-zinc-900 dark:text-zinc-100 py-1"
+                  >
                     {op.label}
                   </option>
                 ))}

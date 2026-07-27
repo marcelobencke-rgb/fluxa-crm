@@ -1693,6 +1693,36 @@
       "reindex": "Reindex",
       "reindexTooltip": "Re-embed all documents (e.g. after adding an embeddings key)",
       "loading": "Loading…"
+    },
+    "aiPlayground": {
+      "subtitle": "— test replies as if you were a customer",
+      "reset": "Reset",
+      "notConfigured": "No agent configured yet — finish Setup first.",
+      "couldNotReply": "Couldn't get a reply.",
+      "couldNotReach": "Couldn't reach the agent.",
+      "emptyNotice": "Send a message to see how your agent would reply.",
+      "emptyNoticeHint": "It uses your knowledge base and behaves exactly like the auto-reply bot — including handoff.",
+      "notSetUp": "Not set up yet? Go to Setup",
+      "handoffBadge": "Would hand off to a human here",
+      "thinking": "Thinking…",
+      "placeholder": "Type a customer message…"
+    },
+    "aiUsage": {
+      "loadFailed": "Failed to load usage",
+      "title": "Token usage",
+      "description": "Tokens spent on your provider key by drafts and the auto-reply bot. Counts only — no message content is stored here.",
+      "lastDays": "Last {days} days",
+      "noUsage": "No AI usage in the last {days} days yet.",
+      "noUsageHint": "This fills in as the assistant drafts and auto-replies.",
+      "totalTokens": "Total tokens",
+      "llmCalls": "LLM calls",
+      "autoReply": "Auto-reply",
+      "drafts": "Drafts",
+      "tokensPerDay": "Tokens per day",
+      "byModel": "By model",
+      "call": "call",
+      "calls": "calls",
+      "partialWindow": "Showing a partial window — usage is high enough that only the most recent records are summarized here."
     }
   }
 }

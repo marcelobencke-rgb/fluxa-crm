@@ -92,10 +92,14 @@ export function DealsSettings() {
               value={selected}
               onChange={(e) => setSelected(e.target.value)}
               disabled={!canEditSettings || profileLoading}
-              className="h-9 w-full rounded-lg border border-border bg-muted px-2.5 text-sm text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-60"
+              className="h-9 w-full rounded-lg border border-border bg-muted px-2.5 text-sm text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary dark:bg-zinc-900 dark:text-zinc-100 dark:border-zinc-800 cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
             >
               {CURRENCIES.map((c) => (
-                <option key={c.code} value={c.code}>
+                <option
+                  key={c.code}
+                  value={c.code}
+                  className="bg-popover text-popover-foreground dark:bg-zinc-900 dark:text-zinc-100 py-1"
+                >
                   {c.code} — {c.label}
                 </option>
               ))}

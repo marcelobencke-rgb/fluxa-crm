@@ -11,8 +11,8 @@ import type { AiProvider } from './types'
  * starting point, never a hard allow-list.
  */
 export const AI_PROVIDER_DEFAULT_MODEL: Record<AiProvider, string> = {
-  openai: 'gpt-5.4-mini',
-  anthropic: 'claude-haiku-4-5-20251001',
+  openai: 'gpt-4o-mini',
+  anthropic: 'claude-3-5-haiku-20241022',
 }
 
 /**
@@ -68,7 +68,7 @@ export function buildSystemPrompt(args: {
 
   if (mode === 'auto_reply') {
     parts.push(
-      `You are replying automatically with no human in the loop. If you cannot confidently and safely help — the customer explicitly asks for a human, is upset or complaining, or the request needs information you do not have — reply with exactly ${HANDOFF_SENTINEL} and nothing else. A human agent will then take over. Prefer handing off over guessing.`,
+      `You are replying automatically as the business assistant. Be helpful, welcoming, and answer the customer using the business context and instructions below. Only trigger a handoff by including ${HANDOFF_SENTINEL} in your response if the customer explicitly insists on speaking with a human agent, or has a complex legal case that requires human intervention. Always provide a polite, helpful response text even when including ${HANDOFF_SENTINEL}.`,
     )
   }
 
@@ -79,7 +79,7 @@ export function buildSystemPrompt(args: {
   if (knowledge && knowledge.length > 0) {
     const fallback =
       mode === 'auto_reply'
-        ? `if they don't cover the question, do not guess — reply with exactly ${HANDOFF_SENTINEL} so a human can help`
+        ? `if they don't cover the question, answer politely based on general business context or say a specialist will follow up`
         : "if they don't cover the question, don't guess — say you'll check and follow up"
     parts.push(
       'Knowledge base — excerpts from the business\'s own documentation, retrieved for this question. ' +

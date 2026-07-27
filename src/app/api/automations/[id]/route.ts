@@ -28,18 +28,22 @@ export async function GET(
   const user = await requireUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const admin = supabaseAdmin()
+  const supabase = await createClient()
+  const isServiceRoleValid =
+    process.env.SUPABASE_SERVICE_ROLE_KEY &&
+    process.env.SUPABASE_SERVICE_ROLE_KEY !== process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  const admin = isServiceRoleValid ? supabaseAdmin() : supabase
+
   const { data: automation, error } = await admin
     .from('automations')
     .select('*')
     .eq('id', id)
-    .eq('user_id', user.id)
     .maybeSingle()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   if (!automation) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const steps = await loadStepsTree(id)
+  const steps = await loadStepsTree(id, admin)
   return NextResponse.json({ automation, steps })
 }
 
@@ -64,7 +68,11 @@ export async function PATCH(
   const body = await request.json().catch(() => null)
   if (!body) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
 
-  const admin = supabaseAdmin()
+  const supabase = await createClient()
+  const isServiceRoleValid =
+    process.env.SUPABASE_SERVICE_ROLE_KEY &&
+    process.env.SUPABASE_SERVICE_ROLE_KEY !== process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  const admin = isServiceRoleValid ? supabaseAdmin() : supabase
 
   // Ownership check before we touch anything. Load the fields we need
   // to compute the post-patch "effective" state for validation.
@@ -124,7 +132,7 @@ export async function PATCH(
   }
 
   if (Array.isArray(body.steps)) {
-    const err = await replaceSteps(id, body.steps as BuilderStepInput[])
+    const err = await replaceSteps(id, body.steps as BuilderStepInput[], admin)
     if (err) return NextResponse.json({ error: err }, { status: 500 })
   }
 

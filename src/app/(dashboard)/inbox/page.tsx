@@ -551,6 +551,25 @@ function InboxPageInner() {
     [activeConversation]
   );
 
+  const handleUpdateContact = useCallback(
+    (updatedContact: Contact) => {
+      setActiveContact(updatedContact);
+      if (activeConversation) {
+        setActiveConversation((prev) =>
+          prev ? { ...prev, contact: updatedContact } : prev
+        );
+      }
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.contact_id === updatedContact.id || c.contact?.id === updatedContact.id
+            ? { ...c, contact: updatedContact }
+            : c
+        )
+      );
+    },
+    [activeConversation]
+  );
+
   // On mobile (<lg) we show a SINGLE pane — either the list or the
   // thread — rather than cramming both side-by-side. Selecting a
   // conversation slides the thread in; the thread's back button pops
@@ -630,7 +649,10 @@ function InboxPageInner() {
             toggle — which is itself desktop-only — never affects it. */}
         {contactPanelOpen && (
           <div className="hidden lg:block">
-            <ContactSidebar contact={activeContact} />
+            <ContactSidebar
+              contact={activeContact}
+              onUpdateContact={handleUpdateContact}
+            />
           </div>
         )}
       </div>

@@ -16,21 +16,28 @@ import {
   isRecipientNotAllowedError,
 } from '@/lib/whatsapp/phone-utils'
 import { supabaseAdmin } from './admin-client'
+import type { IWhatsAppProvider } from '@/lib/whatsapp/providers/types'
+import { MetaProvider } from '@/lib/whatsapp/providers/meta-provider'
+import { EvolutionProvider } from '@/lib/whatsapp/providers/evolution-provider'
 
-// ------------------------------------------------------------
-// Flows-side Meta sender (interactive variants).
-//
-// Mirrors src/lib/automations/meta-send.ts (engineSendText /
-// engineSendTemplate) but emits interactive button + list messages.
-// Kept separate from the automations file so the two engines don't
-// fight over each other's shape — once both stabilize, the
-// phone-variant retry + DB persistence are obvious extraction
-// candidates into a shared base.
-//
-// PR #1 ships this in isolation: callers don't exist yet. PR #2
-// brings the flow runner online and wires it up. Shipping it now
-// keeps the foundation PR self-contained and unit-testable.
-// ------------------------------------------------------------
+function getWhatsAppProvider(config: any): IWhatsAppProvider {
+  if (config.provider === 'evolution') {
+    return new EvolutionProvider(
+      config.evolution_api_url,
+      config.evolution_api_key,
+      config.evolution_instance_id,
+    )
+  }
+  let accessToken = ''
+  if (config.access_token) {
+    try {
+      accessToken = decrypt(config.access_token)
+    } catch {
+      // ignore
+    }
+  }
+  return new MetaProvider(config.phone_number_id, accessToken)
+}
 
 interface SendTextEngineArgs {
   /** Account-level tenancy key. Drives contact + whatsapp_config
@@ -50,18 +57,6 @@ interface SendTextEngineArgs {
   aiGenerated?: boolean
 }
 
-/**
- * Send a plain-text WhatsApp message from the Flows engine.
- *
- * Used by the runner's `send_message` and `collect_input` nodes —
- * both prompt the customer with text and either auto-advance (the
- * send_message case) or suspend awaiting a text reply (collect_input).
- *
- * Wraps the same phone-variant retry + DB persistence pattern as the
- * interactive senders; the duplication will be DRY'd into a shared
- * `engineSendBase` once the v2 features (templates with variables,
- * media sends) settle.
- */
 export async function engineSendText(
   args: SendTextEngineArgs,
 ): Promise<{ whatsapp_message_id: string }> {
@@ -91,12 +86,10 @@ export async function engineSendText(
     throw new Error('WhatsApp not configured for this account')
   }
 
-  const accessToken = decrypt(config.access_token)
+  const provider = getWhatsAppProvider(config)
 
   const attempt = async (phone: string): Promise<string> => {
-    const r = await sendTextMessage({
-      phoneNumberId: config.phone_number_id,
-      accessToken,
+    const r = await provider.sendMessage({
       to: phone,
       text: args.text,
     })
@@ -135,7 +128,7 @@ export async function engineSendText(
     ai_generated: args.aiGenerated ?? false,
   })
   if (msgErr) {
-    throw new Error(`sent to Meta but DB insert failed: ${msgErr.message}`)
+    throw new Error(`sent to WhatsApp but DB insert failed: ${msgErr.message}`)
   }
 
   await db
@@ -163,15 +156,6 @@ interface SendMediaEngineArgs {
   filename?: string
 }
 
-/**
- * Send an image / video / document from the Flows engine.
- *
- * Used by the runner's `send_media` node. Auto-advances after the
- * send lands (same suspend semantics as send_message). Same
- * phone-variant retry + DB persistence as the text/interactive
- * senders; persists the outgoing message with `content_type` matching
- * the media kind so the inbox renders the right preview.
- */
 export async function engineSendMedia(
   args: SendMediaEngineArgs,
 ): Promise<{ whatsapp_message_id: string }> {
@@ -201,17 +185,14 @@ export async function engineSendMedia(
     throw new Error('WhatsApp not configured for this account')
   }
 
-  const accessToken = decrypt(config.access_token)
+  const provider = getWhatsAppProvider(config)
 
   const attempt = async (phone: string): Promise<string> => {
-    const r = await sendMediaMessage({
-      phoneNumberId: config.phone_number_id,
-      accessToken,
+    const r = await provider.sendMedia({
       to: phone,
-      kind: args.kind,
-      link: args.link,
+      type: args.kind,
+      mediaUrl: args.link,
       caption: args.caption,
-      filename: args.filename,
     })
     return r.messageId
   }
@@ -353,30 +334,28 @@ async function sendInteractiveViaMeta(
     throw new Error('WhatsApp not configured for this account')
   }
 
-  const accessToken = decrypt(config.access_token)
+  const provider = getWhatsAppProvider(config)
 
   const attempt = async (phone: string): Promise<string> => {
-    if (input.kind === 'buttons') {
-      const r = await sendInteractiveButtons({
-        phoneNumberId: config.phone_number_id,
-        accessToken,
-        to: phone,
-        bodyText: input.bodyText,
-        buttons: input.buttons,
-        headerText: input.headerText,
-        footerText: input.footerText,
-      })
-      return r.messageId
-    }
-    const r = await sendInteractiveList({
-      phoneNumberId: config.phone_number_id,
-      accessToken,
+    const r = await provider.sendInteractive({
       to: phone,
-      bodyText: input.bodyText,
-      buttonLabel: input.buttonLabel,
-      sections: input.sections,
-      headerText: input.headerText,
-      footerText: input.footerText,
+      interactive:
+        input.kind === 'buttons'
+          ? {
+              kind: 'buttons',
+              body: input.bodyText,
+              header: input.headerText,
+              footer: input.footerText,
+              buttons: input.buttons,
+            }
+          : {
+              kind: 'list',
+              body: input.bodyText,
+              header: input.headerText,
+              footer: input.footerText,
+              button_label: input.buttonLabel,
+              sections: input.sections,
+            },
     })
     return r.messageId
   }

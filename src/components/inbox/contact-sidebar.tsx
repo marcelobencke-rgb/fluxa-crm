@@ -15,17 +15,22 @@ import {
   DollarSign,
   StickyNote,
   Plus,
+  Pencil,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { format } from "date-fns";
 import { useTranslations } from "next-intl";
+import { toast } from "sonner";
 
 interface ContactSidebarProps {
   contact: Contact | null;
+  onUpdateContact?: (updated: Contact) => void;
 }
 
-export function ContactSidebar({ contact }: ContactSidebarProps) {
+export function ContactSidebar({ contact, onUpdateContact }: ContactSidebarProps) {
   const tSidebar = useTranslations("Inbox.sidebar");
   const tThread = useTranslations("Inbox.messageThread");
 
@@ -36,6 +41,41 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
   const [tags, setTags] = useState<(Tag & { contact_tag_id: string })[]>([]);
   const [newNote, setNewNote] = useState("");
   const [addingNote, setAddingNote] = useState(false);
+
+  const [editingName, setEditingName] = useState(false);
+  const [nameValue, setNameValue] = useState("");
+  const [savingName, setSavingName] = useState(false);
+
+  useEffect(() => {
+    setNameValue(contact?.name || "");
+    setEditingName(false);
+  }, [contact?.id, contact?.name]);
+
+  const handleSaveName = useCallback(async () => {
+    if (!contact) return;
+    const trimmed = nameValue.trim();
+    if (!trimmed || trimmed === contact.name) {
+      setEditingName(false);
+      return;
+    }
+    setSavingName(true);
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("contacts")
+      .update({ name: trimmed, updated_at: new Date().toISOString() })
+      .eq("id", contact.id);
+
+    if (error) {
+      toast.error("Erro ao atualizar nome do contato");
+      console.error("Failed to update contact name:", error);
+    } else {
+      const updated = { ...contact, name: trimmed };
+      onUpdateContact?.(updated);
+      toast.success("Nome do contato atualizado!");
+      setEditingName(false);
+    }
+    setSavingName(false);
+  }, [contact, nameValue, onUpdateContact]);
 
   const fetchContactData = useCallback(async () => {
     if (!contact) return;
@@ -147,9 +187,53 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
                 initials
               )}
             </div>
-            <h3 className="mt-3 text-sm font-semibold text-foreground">
-              {displayName}
-            </h3>
+            {editingName ? (
+              <div className="mt-2 flex items-center justify-center gap-1 w-full">
+                <Input
+                  value={nameValue}
+                  onChange={(e) => setNameValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleSaveName();
+                    if (e.key === "Escape") setEditingName(false);
+                  }}
+                  autoFocus
+                  placeholder="Nome do contato"
+                  className="h-8 text-xs bg-muted text-foreground border-border text-center"
+                  disabled={savingName}
+                />
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={handleSaveName}
+                  disabled={savingName}
+                  className="h-8 w-8 shrink-0 text-primary hover:bg-muted"
+                  title="Salvar nome"
+                >
+                  <Check className="h-4 w-4" />
+                </Button>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={() => setEditingName(false)}
+                  disabled={savingName}
+                  className="h-8 w-8 shrink-0 text-muted-foreground hover:bg-muted"
+                  title="Cancelar"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            ) : (
+              <div
+                className="mt-3 flex items-center justify-center gap-1.5 group cursor-pointer"
+                onClick={() => setEditingName(true)}
+                title="Clique para editar o nome"
+              >
+                <h3 className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors">
+                  {displayName}
+                </h3>
+                <Pencil className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary transition-colors opacity-70 group-hover:opacity-100" />
+              </div>
+            )}
             {contact.company && (
               <p className="text-xs text-muted-foreground">{contact.company}</p>
             )}

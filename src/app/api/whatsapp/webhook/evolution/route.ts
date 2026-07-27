@@ -125,12 +125,18 @@ async function processEvolutionWebhook(body: any, instanceName: string) {
       return
     }
 
-    if (remoteJid.includes('@g.us')) return // Ignore groups for now
-
     // Remove @s.whatsapp.net and device suffix like :12
     const phone = remoteJid.split('@')[0].split(':')[0]
-    const pushName = msgData?.pushName || msgData?.verifiedBizName || phone
     const msgId = msgData?.key?.id || msgData?.id || `evo-${Date.now()}`
+
+    // Extract customer pushName — do NOT use verifiedBizName as fallback
+    // because verifiedBizName is the instance/business name (e.g. "Teu Vizinho - Suporte")
+    const pushName =
+      msgData?.pushName ||
+      msgData?.pushname ||
+      body?.pushName ||
+      body?.data?.pushName ||
+      ''
 
     // The actual text/media content is inside msgData.message or msgData
     const messageContent =
@@ -389,7 +395,12 @@ async function processOutboundEvolutionMessage(msgData: any, config: any) {
 
   if (existingContact) {
     contactId = existingContact.id
-    if (pushName && pushName !== phone && pushName !== existingContact.name) {
+    const isPhoneOnlyName =
+      !existingContact.name ||
+      existingContact.name === existingContact.phone ||
+      existingContact.name.replace(/\D/g, '') === existingContact.phone.replace(/\D/g, '')
+
+    if (pushName && isPhoneOnlyName && pushName !== phone) {
       await supabaseAdmin()
         .from('contacts')
         .update({ name: pushName, updated_at: new Date().toISOString() })

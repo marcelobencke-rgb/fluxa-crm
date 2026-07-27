@@ -1023,8 +1023,14 @@ async function findOrCreateContact(
   )
 
   if (existingContact) {
-    // Update name if it changed
-    if (name && name !== existingContact.name) {
+    // Only backfill contact name if it was previously empty or just the raw phone number.
+    // Preserves custom names edited by users in the CRM so webhooks don't overwrite them.
+    const isPhoneOnlyName =
+      !existingContact.name ||
+      existingContact.name === existingContact.phone ||
+      existingContact.name.replace(/\D/g, '') === existingContact.phone.replace(/\D/g, '');
+
+    if (name && isPhoneOnlyName && name !== phone) {
       await supabaseAdmin()
         .from('contacts')
         .update({ name, updated_at: new Date().toISOString() })

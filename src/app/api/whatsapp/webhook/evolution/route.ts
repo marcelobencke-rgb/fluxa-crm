@@ -103,7 +103,9 @@ async function processEvolutionWebhook(body: any, instanceName: string) {
     msgData?.imageMessage ||
     msgData?.videoMessage ||
     msgData?.audioMessage ||
-    msgData?.documentMessage
+    msgData?.documentMessage ||
+    msgData?.body ||
+    msgData?.text
   )
 
   console.log('[evo-webhook] Payload analysis:', JSON.stringify({

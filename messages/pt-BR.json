@@ -1633,6 +1633,7 @@
       "title": "Configuração do Agente",
       "description": "Traga a sua própria chave OpenAI ou Anthropic. O wacrm chama o provedor diretamente com sua chave — sem taxas de IA por assento e seus dados permanecem seus. Isso alimenta as respostas redigidas por IA na caixa de entrada, o bot de resposta automática e o Playground.",
       "adminOnlyConfig": "Apenas administradores e proprietários podem alterar a configuração de IA.",
+      "loading": "Carregando configuração de IA...",
       "loadFailed": "Falha ao carregar a configuração de IA",
       "providerAndKey": "Provedor e chave",
       "encryptionNotice": "Sua chave é criptografada no armazenamento (AES-256-GCM) e nunca mais é mostrada depois de salva.",

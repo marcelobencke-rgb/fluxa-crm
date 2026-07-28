@@ -123,14 +123,19 @@ export function SettingsOverview({
       const [row, health] = await Promise.allSettled([
         supabase
           .from('whatsapp_config')
-          .select('phone_number_id')
+          .select('provider, phone_number_id, evolution_instance_id')
           .eq('account_id', acctId)
           .maybeSingle(),
         fetch('/api/whatsapp/config', { cache: 'no-store' }).then((r) => r.json()),
       ]);
       if (cancelled) return;
+      const rowData = row.status === 'fulfilled' ? row.value.data : null;
+      const isConfigured =
+        rowData?.provider === 'evolution'
+          ? !!rowData?.evolution_instance_id
+          : !!rowData?.phone_number_id;
       setWhatsapp({
-        configured: row.status === 'fulfilled' && !!row.value.data?.phone_number_id,
+        configured: isConfigured,
         connected: health.status === 'fulfilled' && !!health.value?.connected,
       });
       setWhatsappLoading(false);
@@ -216,6 +221,11 @@ export function SettingsOverview({
       section: 'appearance',
       loading: false,
       subtitle: t('appearance', { mode: cap(mode), theme: themeName }),
+    },
+    {
+      section: 'webhooks',
+      loading: false,
+      subtitle: 'Inbound, Outbound & Logs',
     },
   ];
 

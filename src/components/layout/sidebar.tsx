@@ -70,6 +70,7 @@ import {
   AvatarFallback,
   AvatarImage,
 } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -80,7 +81,7 @@ import {
 
 interface NavItem {
   href: string;
-  labelKey: string;
+  labelKey: keyof (typeof import("../../../messages/pt-BR.json"))["Sidebar"];
   icon: typeof LayoutDashboard;
   /**
    * When true, the nav row renders a small "Beta" chip after the label.

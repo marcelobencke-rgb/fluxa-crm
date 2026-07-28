@@ -448,8 +448,16 @@ export function WhatsAppConfig() {
   return (
     <section className="animate-in fade-in-50 duration-200">
       <SettingsPanelHead
-        title={t("title")}
-        description={t("description")}
+        title={
+          provider === 'evolution'
+            ? 'Conexão com WhatsApp (Evolution API)'
+            : t('title')
+        }
+        description={
+          provider === 'evolution'
+            ? 'Conecte e gerencie sua instância do WhatsApp via Evolution API, acompanhando status e QR Code em tempo real.'
+            : t('description')
+        }
       />
       <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
       {/* Main config form */}
@@ -489,6 +497,30 @@ export function WhatsAppConfig() {
           </Alert>
         )}
 
+        {/* Provider Selection */}
+        <div className="flex gap-4 p-1 bg-muted rounded-lg w-fit">
+          <button
+            onClick={() => setProvider('meta')}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              provider === 'meta'
+                ? 'bg-background text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            Meta Cloud API
+          </button>
+          <button
+            onClick={() => setProvider('evolution')}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              provider === 'evolution'
+                ? 'bg-background text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            Evolution API
+          </button>
+        </div>
+
         {/* Connection Status */}
         <Alert className="bg-card border-border">
           <div className="flex items-center gap-2">
@@ -498,15 +530,23 @@ export function WhatsAppConfig() {
               <XCircle className="size-4 text-red-500" />
             )}
             <AlertTitle className="text-foreground mb-0">
-              {connectionStatus === 'connected' ? t('credentialsValid') : t('notConnected')}
+              {connectionStatus === 'connected'
+                ? provider === 'evolution'
+                  ? 'Instância Evolution Conectada'
+                  : t('credentialsValid')
+                : t('notConnected')}
             </AlertTitle>
           </div>
           <AlertDescription className="text-muted-foreground flex flex-col gap-2">
             <span>
               {connectionStatus === 'connected'
-                ? t('connectedDesc')
+                ? provider === 'evolution'
+                  ? 'Sua instância da Evolution API está configurada e autenticada. As mensagens e eventos serão recebidos em tempo real no CRM.'
+                  : t('connectedDesc')
                 : statusMessage ||
-                  t('notConnectedDesc')}
+                  (provider === 'evolution'
+                    ? 'Configure a Instance ID, URL da API e API Key da Evolution API abaixo ou gere um QR Code para autenticar no WhatsApp.'
+                    : t('notConnectedDesc'))}
             </span>
             
             {qrCode && (
@@ -529,7 +569,7 @@ export function WhatsAppConfig() {
             without a successful /register call the number won't
             receive inbound events. Surface this dimension separately
             so users don't trust a misleading green banner. */}
-        {config && (
+        {config && provider === 'meta' && (
           <Alert
             className={
               isRegistered
@@ -627,38 +667,18 @@ export function WhatsAppConfig() {
           </Alert>
         )}
 
-        {/* Provider Selection */}
-        <div className="flex gap-4 p-1 bg-muted rounded-lg w-fit">
-          <button
-            onClick={() => setProvider('meta')}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              provider === 'meta'
-                ? 'bg-background text-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            Meta Cloud API
-          </button>
-          <button
-            onClick={() => setProvider('evolution')}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              provider === 'evolution'
-                ? 'bg-background text-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            Evolution API
-          </button>
-        </div>
-
         {/* API Credentials */}
         <Card>
           <CardHeader>
             <CardTitle className="text-foreground">
-              {provider === 'meta' ? t('apiCredentialsTitle') : 'Evolution API Credentials'}
+              {provider === 'meta'
+                ? t('apiCredentialsTitle')
+                : 'Credenciais Evolution API'}
             </CardTitle>
             <CardDescription className="text-muted-foreground">
-              {provider === 'meta' ? t('apiCredentialsDesc') : 'Configure your Evolution API connection details.'}
+              {provider === 'meta'
+                ? t('apiCredentialsDesc')
+                : 'Configure os dados de conexão da sua instância da Evolution API.'}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -810,9 +830,15 @@ export function WhatsAppConfig() {
         {/* Webhook URL */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-foreground">{t('webhookTitle')}</CardTitle>
+            <CardTitle className="text-foreground">
+              {provider === 'evolution'
+                ? 'Webhook da Evolution API'
+                : t('webhookTitle')}
+            </CardTitle>
             <CardDescription className="text-muted-foreground">
-              {t('webhookDesc')}
+              {provider === 'evolution'
+                ? 'Use esta URL de retorno para configurar os eventos na sua instância da Evolution API (MESSAGES_UPSERT, MESSAGES_UPDATE, CONNECTION_UPDATE).'
+                : t('webhookDesc')}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -898,93 +924,183 @@ export function WhatsAppConfig() {
       <div>
         <Card>
           <CardHeader>
-            <CardTitle className="text-foreground text-base">{t('setupInstructions')}</CardTitle>
+            <CardTitle className="text-foreground text-base">
+              {provider === 'meta'
+                ? t('setupInstructions')
+                : 'Instruções de Configuração'}
+            </CardTitle>
             <CardDescription className="text-muted-foreground">
-              {t('setupInstructionsDesc')}
+              {provider === 'meta'
+                ? t('setupInstructionsDesc')
+                : 'Siga estas etapas para conectar sua instância da Evolution API.'}
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Accordion>
-              <AccordionItem className="border-border">
-                <AccordionTrigger className="text-muted-foreground hover:text-foreground hover:no-underline">
-                  <span className="flex items-center gap-2">
-                    <span className="flex size-5 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">1</span>
-                    {t('step1')}
-                  </span>
-                </AccordionTrigger>
-                <AccordionContent className="text-muted-foreground">
-                  <ol className="list-decimal list-inside space-y-1 text-sm">
-                    <li dangerouslySetInnerHTML={{ __html: t('step1_1') }} />
-                    <li>{t('step1_2')}</li>
-                    <li>{t('step1_3')}</li>
-                    <li>{t('step1_4')}</li>
-                  </ol>
-                </AccordionContent>
-              </AccordionItem>
+            {provider === 'meta' ? (
+              <>
+                <Accordion>
+                  <AccordionItem className="border-border">
+                    <AccordionTrigger className="text-muted-foreground hover:text-foreground hover:no-underline">
+                      <span className="flex items-center gap-2">
+                        <span className="flex size-5 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">1</span>
+                        {t('step1')}
+                      </span>
+                    </AccordionTrigger>
+                    <AccordionContent className="text-muted-foreground">
+                      <ol className="list-decimal list-inside space-y-1 text-sm">
+                        <li dangerouslySetInnerHTML={{ __html: t('step1_1') }} />
+                        <li>{t('step1_2')}</li>
+                        <li>{t('step1_3')}</li>
+                        <li>{t('step1_4')}</li>
+                      </ol>
+                    </AccordionContent>
+                  </AccordionItem>
 
-              <AccordionItem className="border-border">
-                <AccordionTrigger className="text-muted-foreground hover:text-foreground hover:no-underline">
-                  <span className="flex items-center gap-2">
-                    <span className="flex size-5 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">2</span>
-                    {t('step2')}
-                  </span>
-                </AccordionTrigger>
-                <AccordionContent className="text-muted-foreground">
-                  <ol className="list-decimal list-inside space-y-1 text-sm">
-                    <li>{t('step2_1')}</li>
-                    <li>{t('step2_2')}</li>
-                    <li>{t('step2_3')}</li>
-                  </ol>
-                </AccordionContent>
-              </AccordionItem>
+                  <AccordionItem className="border-border">
+                    <AccordionTrigger className="text-muted-foreground hover:text-foreground hover:no-underline">
+                      <span className="flex items-center gap-2">
+                        <span className="flex size-5 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">2</span>
+                        {t('step2')}
+                      </span>
+                    </AccordionTrigger>
+                    <AccordionContent className="text-muted-foreground">
+                      <ol className="list-decimal list-inside space-y-1 text-sm">
+                        <li>{t('step2_1')}</li>
+                        <li>{t('step2_2')}</li>
+                        <li>{t('step2_3')}</li>
+                      </ol>
+                    </AccordionContent>
+                  </AccordionItem>
 
-              <AccordionItem className="border-border">
-                <AccordionTrigger className="text-muted-foreground hover:text-foreground hover:no-underline">
-                  <span className="flex items-center gap-2">
-                    <span className="flex size-5 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">3</span>
-                    {t('step3')}
-                  </span>
-                </AccordionTrigger>
-                <AccordionContent className="text-muted-foreground">
-                  <ol className="list-decimal list-inside space-y-1 text-sm">
-                    <li>{t('step3_1')}</li>
-                    <li>{t.rich('step3_2', { strong: (chunks) => <strong className="text-foreground">{chunks}</strong> })}</li>
-                    <li>{t.rich('step3_3', { strong: (chunks) => <strong className="text-foreground">{chunks}</strong> })}</li>
-                    <li>{t.rich('step3_4', { strong: (chunks) => <strong className="text-foreground">{chunks}</strong> })}</li>
-                  </ol>
-                </AccordionContent>
-              </AccordionItem>
+                  <AccordionItem className="border-border">
+                    <AccordionTrigger className="text-muted-foreground hover:text-foreground hover:no-underline">
+                      <span className="flex items-center gap-2">
+                        <span className="flex size-5 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">3</span>
+                        {t('step3')}
+                      </span>
+                    </AccordionTrigger>
+                    <AccordionContent className="text-muted-foreground">
+                      <ol className="list-decimal list-inside space-y-1 text-sm">
+                        <li>{t('step3_1')}</li>
+                        <li>{t.rich('step3_2', { strong: (chunks) => <strong className="text-foreground">{chunks}</strong> })}</li>
+                        <li>{t.rich('step3_3', { strong: (chunks) => <strong className="text-foreground">{chunks}</strong> })}</li>
+                        <li>{t.rich('step3_4', { strong: (chunks) => <strong className="text-foreground">{chunks}</strong> })}</li>
+                      </ol>
+                    </AccordionContent>
+                  </AccordionItem>
 
-              <AccordionItem className="border-border">
-                <AccordionTrigger className="text-muted-foreground hover:text-foreground hover:no-underline">
-                  <span className="flex items-center gap-2">
-                    <span className="flex size-5 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">4</span>
-                    {t('step4')}
-                  </span>
-                </AccordionTrigger>
-                <AccordionContent className="text-muted-foreground">
-                  <ol className="list-decimal list-inside space-y-1 text-sm">
-                    <li>{t('step4_1')}</li>
-                    <li>{t('step4_2')}</li>
-                    <li dangerouslySetInnerHTML={{ __html: t.raw('step4_3') }} />
-                    <li dangerouslySetInnerHTML={{ __html: t.raw('step4_4') }} />
-                    <li>{t('step4_5')}</li>
-                  </ol>
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
+                  <AccordionItem className="border-border">
+                    <AccordionTrigger className="text-muted-foreground hover:text-foreground hover:no-underline">
+                      <span className="flex items-center gap-2">
+                        <span className="flex size-5 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">4</span>
+                        {t('step4')}
+                      </span>
+                    </AccordionTrigger>
+                    <AccordionContent className="text-muted-foreground">
+                      <ol className="list-decimal list-inside space-y-1 text-sm">
+                        <li>{t('step4_1')}</li>
+                        <li>{t('step4_2')}</li>
+                        <li dangerouslySetInnerHTML={{ __html: t.raw('step4_3') }} />
+                        <li dangerouslySetInnerHTML={{ __html: t.raw('step4_4') }} />
+                        <li>{t('step4_5')}</li>
+                      </ol>
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
 
-            <div className="mt-4 pt-4 border-t border-border">
-              <a
-                href="https://developers.facebook.com/docs/whatsapp/cloud-api/get-started"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 text-sm text-primary hover:text-primary/80 transition-colors"
-              >
-                <ExternalLink className="size-3.5" />
-                {t('metaDocs')}
-              </a>
-            </div>
+                <div className="mt-4 pt-4 border-t border-border">
+                  <a
+                    href="https://developers.facebook.com/docs/whatsapp/cloud-api/get-started"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-sm text-primary hover:text-primary/80 transition-colors"
+                  >
+                    <ExternalLink className="size-3.5" />
+                    {t('metaDocs')}
+                  </a>
+                </div>
+              </>
+            ) : (
+              <>
+                <Accordion>
+                  <AccordionItem className="border-border">
+                    <AccordionTrigger className="text-muted-foreground hover:text-foreground hover:no-underline">
+                      <span className="flex items-center gap-2">
+                        <span className="flex size-5 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+                          1
+                        </span>
+                        Criar ou Acessar Instância
+                      </span>
+                    </AccordionTrigger>
+                    <AccordionContent className="text-muted-foreground">
+                      <p className="text-sm">
+                        Crie uma instância no painel da Evolution API (v2) e verifique se ela está ativa.
+                      </p>
+                    </AccordionContent>
+                  </AccordionItem>
+
+                  <AccordionItem className="border-border">
+                    <AccordionTrigger className="text-muted-foreground hover:text-foreground hover:no-underline">
+                      <span className="flex items-center gap-2">
+                        <span className="flex size-5 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+                          2
+                        </span>
+                        Preencher Credenciais
+                      </span>
+                    </AccordionTrigger>
+                    <AccordionContent className="text-muted-foreground">
+                      <p className="text-sm">
+                        Insira o <strong>Nome da Instância (Instance ID)</strong>, a <strong>URL do servidor Evolution</strong> e a <strong>API Key</strong> de autenticação no formulário ao lado.
+                      </p>
+                    </AccordionContent>
+                  </AccordionItem>
+
+                  <AccordionItem className="border-border">
+                    <AccordionTrigger className="text-muted-foreground hover:text-foreground hover:no-underline">
+                      <span className="flex items-center gap-2">
+                        <span className="flex size-5 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+                          3
+                        </span>
+                        Salvar e Conectar WhatsApp
+                      </span>
+                    </AccordionTrigger>
+                    <AccordionContent className="text-muted-foreground">
+                      <p className="text-sm">
+                        Clique em <strong>Salvar Configuração</strong>. Se o WhatsApp ainda não estiver autenticado na instância, escaneie o <strong>QR Code</strong> que será exibido.
+                      </p>
+                    </AccordionContent>
+                  </AccordionItem>
+
+                  <AccordionItem className="border-border">
+                    <AccordionTrigger className="text-muted-foreground hover:text-foreground hover:no-underline">
+                      <span className="flex items-center gap-2">
+                        <span className="flex size-5 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+                          4
+                        </span>
+                        Configurar Webhooks
+                      </span>
+                    </AccordionTrigger>
+                    <AccordionContent className="text-muted-foreground">
+                      <p className="text-sm">
+                        O CRM configurará os webhooks automaticamente. Se precisar ajustar manualmente, copie a <strong>URL de Retorno do Webhook</strong> abaixo e ative os eventos <code>MESSAGES_UPSERT</code>, <code>MESSAGES_UPDATE</code> e <code>CONNECTION_UPDATE</code> na sua Evolution API.
+                      </p>
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
+
+                <div className="mt-4 pt-4 border-t border-border">
+                  <a
+                    href="https://doc.evolution-api.com/v2/pt/get-started/introduction"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-sm text-primary hover:text-primary/80 transition-colors"
+                  >
+                    <ExternalLink className="size-3.5" />
+                    Documentação Oficial Evolution API
+                  </a>
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>

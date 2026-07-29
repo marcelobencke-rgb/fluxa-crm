@@ -2,7 +2,19 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { Loader2, Sparkles, CheckCircle2, Trash2, Eye, EyeOff } from 'lucide-react';
+import {
+  Loader2,
+  Sparkles,
+  CheckCircle2,
+  Trash2,
+  Eye,
+  EyeOff,
+  Lightbulb,
+  ChevronDown,
+  ChevronUp,
+  Copy,
+  Plus,
+} from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { canEditSettings } from '@/lib/auth/roles';
 import { Button } from '@/components/ui/button';
@@ -88,6 +100,113 @@ const MODEL_OPTIONS: Record<
   ],
 };
 
+interface AiPromptGuideProps {
+  onInsertSnippet: (snippet: string) => void;
+  disabled?: boolean;
+}
+
+function AiPromptGuide({ onInsertSnippet, disabled }: AiPromptGuideProps) {
+  const [open, setOpen] = useState(false);
+
+  const snippets = [
+    {
+      title: '🏷️ Transferência para Humano ([[HANDOFF]])',
+      description:
+        'Ensina a IA a transferir o atendimento para a equipe humana quando o cliente quiser agendar, remarcar ou falar com uma pessoa.',
+      code: `### REGRA DE TRANSFERÊNCIA (HANDOFF)
+Sempre que o cliente solicitar agendamento, consulta ou pedir para falar com um humano:
+1. Responda educadamente informando que vai chamar um especialista da equipe.
+2. Obrigatoriamente adicione a tag [[HANDOFF]] no final da sua mensagem.`,
+    },
+    {
+      title: '⚡ Avanço Automático no Funil (update_deal_stage)',
+      description:
+        'A IA movimenta o card do cliente em tempo real no seu Kanban do Funil (CRM) conforme a conversa evolui.',
+      code: `### REGRA DE AVANÇO NO FUNIL
+Nosso funil se chama "Comercial" e tem as etapas: "Novo Lead", "Qualificado", "Agendamento Solicitado" e "Venda Fechada".
+- Se o cliente demonstrar interesse real, chame a ferramenta update_deal_stage movendo para "Qualificado".
+- Se pedir para agendar, chame update_deal_stage movendo para "Agendamento Solicitado" antes de executar o [[HANDOFF]].`,
+    },
+    {
+      title: '🔒 Proteção de Preços e Prazos',
+      description:
+        'Impede a IA de inventar preços ou promoções que não constem na sua Base de Conhecimento.',
+      code: `### REGRA DE SEGURANÇA E VALORES
+Você NÃO inventa preços, prazos ou promoções. Baseie-se apenas nos documentos da Base de Conhecimento. Se o cliente perguntar sobre condições personalizadas, transfira para um humano usando [[HANDOFF]].`,
+    },
+  ];
+
+  return (
+    <div className="rounded-lg border border-primary/20 bg-primary/5 p-3.5 mt-3 transition-all">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="flex w-full items-center justify-between text-left font-medium text-foreground hover:opacity-80 transition-opacity"
+      >
+        <span className="flex items-center gap-2 text-sm font-semibold text-primary">
+          <Lightbulb className="h-4 w-4" />
+          Guia de Comandos e Automações da IA (Handoff & Avanço de Funil)
+        </span>
+        {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+      </button>
+
+      {open && (
+        <div className="mt-3.5 space-y-3.5 text-sm border-t border-primary/10 pt-3">
+          <p className="text-xs text-muted-foreground">
+            Abaixo estão as ferramentas e tags que a IA do CRM é capaz de executar nativamente. Você pode copiar ou clicar em <strong>&quot;Inserir no prompt&quot;</strong> para adicionar o modelo à sua caixa de texto acima.
+          </p>
+
+          <div className="space-y-3">
+            {snippets.map((s, idx) => (
+              <div
+                key={idx}
+                className="rounded-md border border-border/80 bg-card p-3 shadow-sm space-y-2"
+              >
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <h4 className="font-semibold text-foreground text-xs">{s.title}</h4>
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs px-2"
+                      onClick={() => {
+                        navigator.clipboard.writeText(s.code);
+                        toast.success('Exemplo copiado para a área de transferência!');
+                      }}
+                    >
+                      <Copy className="mr-1 h-3 w-3" />
+                      Copiar
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      className="h-7 text-xs px-2"
+                      disabled={disabled}
+                      onClick={() => {
+                        onInsertSnippet(s.code);
+                        toast.success('Regra inserida com sucesso no seu Prompt!');
+                      }}
+                    >
+                      <Plus className="mr-1 h-3 w-3" />
+                      Inserir no prompt
+                    </Button>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">{s.description}</p>
+                <pre className="overflow-x-auto rounded bg-muted/60 p-2.5 text-[11px] font-mono text-foreground/90 border border-border/40 whitespace-pre-wrap">
+                  {s.code}
+                </pre>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function AiConfig() {
   const { accountId, accountRole, profileLoading } = useAuth();
   const canEdit = accountRole ? canEditSettings(accountRole) : false;
@@ -115,6 +234,14 @@ export function AiConfig() {
   // Empty string = leave unassigned (shared queue).
   const [handoffAgentId, setHandoffAgentId] = useState('');
   const [members, setMembers] = useState<AccountMember[]>([]);
+
+  const handleInsertSnippet = useCallback((snippet: string) => {
+    setSystemPrompt((prev) => {
+      const trimmed = prev.trim();
+      if (!trimmed) return snippet;
+      return `${trimmed}\n\n${snippet}`;
+    });
+  }, []);
 
   // Guard keyed on the account (not a bare boolean) so an in-place
   // account switch — ownership transfer, multi-account membership —
@@ -457,6 +584,7 @@ export function AiConfig() {
                 rows={5}
                 disabled={disabled}
               />
+              <AiPromptGuide onInsertSnippet={handleInsertSnippet} disabled={disabled} />
             </div>
 
             <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">

@@ -437,31 +437,43 @@ function GuardrailFields({
   );
 }
 
-function AiAdvancedParamsCard({ disabled }: { disabled?: boolean }) {
-  const [temperature, setTemperature] = useState(0.3);
-  const [maxTokens, setMaxTokens] = useState(1024);
-  const [contextWindow, setContextWindow] = useState(20);
-  const [ragTopK, setRagTopK] = useState(5);
-  const [similarityThreshold, setSimilarityThreshold] = useState(0.72);
-  const [confidenceThreshold, setConfidenceThreshold] = useState(0.55);
+interface AiAdvancedParamsCardProps {
+  temperature: number;
+  setTemperature: (v: number) => void;
+  maxTokens: number;
+  setMaxTokens: (v: number) => void;
+  contextWindow: number;
+  setContextWindow: (v: number) => void;
+  ragTopK: number;
+  setRagTopK: (v: number) => void;
+  similarityThreshold: number;
+  setSimilarityThreshold: (v: number) => void;
+  confidenceThreshold: number;
+  setConfidenceThreshold: (v: number) => void;
+  guardrails: GuardrailItem[];
+  setGuardrails: React.Dispatch<React.SetStateAction<GuardrailItem[]>>;
+  disabled?: boolean;
+}
 
+function AiAdvancedParamsCard({
+  temperature,
+  setTemperature,
+  maxTokens,
+  setMaxTokens,
+  contextWindow,
+  setContextWindow,
+  ragTopK,
+  setRagTopK,
+  similarityThreshold,
+  setSimilarityThreshold,
+  confidenceThreshold,
+  setConfidenceThreshold,
+  guardrails,
+  setGuardrails,
+  disabled,
+}: AiAdvancedParamsCardProps) {
   const [pendingKind, setPendingKind] =
     useState<GuardrailKind>('window_check');
-
-  const [guardrails, setGuardrails] = useState<GuardrailItem[]>([
-    {
-      kind: 'window_check',
-      start_hour: 7,
-      end_hour: 22,
-      timezone: 'America/Sao_Paulo',
-      reason: 'Janela operacional 7h-22h',
-    },
-    {
-      kind: 'rag_must_hit',
-      min_citations: 1,
-      reason: 'Exigir citação da base',
-    },
-  ]);
 
   function updateGuardrail(idx: number, patch: Partial<GuardrailItem>) {
     setGuardrails((prev) =>
@@ -736,6 +748,27 @@ export function AiConfig() {
   const [handoffAgentId, setHandoffAgentId] = useState('');
   const [members, setMembers] = useState<AccountMember[]>([]);
 
+  const [temperature, setTemperature] = useState(0.3);
+  const [maxTokens, setMaxTokens] = useState(1024);
+  const [contextWindow, setContextWindow] = useState(20);
+  const [ragTopK, setRagTopK] = useState(5);
+  const [similarityThreshold, setSimilarityThreshold] = useState(0.72);
+  const [confidenceThreshold, setConfidenceThreshold] = useState(0.55);
+  const [guardrails, setGuardrails] = useState<GuardrailItem[]>([
+    {
+      kind: 'window_check',
+      start_hour: 7,
+      end_hour: 22,
+      timezone: 'America/Sao_Paulo',
+      reason: 'Janela operacional 7h-22h',
+    },
+    {
+      kind: 'rag_must_hit',
+      min_citations: 1,
+      reason: 'Exigir citação da base',
+    },
+  ]);
+
   const handleInsertSnippet = useCallback((snippet: string) => {
     setSystemPrompt((prev) => {
       const trimmed = prev.trim();
@@ -774,6 +807,15 @@ export function AiConfig() {
         setHasStoredEmbeddingsKey(Boolean(data.has_embeddings_key));
         setEmbeddingsKey(data.has_embeddings_key ? MASKED_KEY : '');
         setEmbeddingsKeyEdited(false);
+        if (data.config && typeof data.config === 'object') {
+          if (data.config.temperature !== undefined) setTemperature(data.config.temperature);
+          if (data.config.max_tokens !== undefined) setMaxTokens(data.config.max_tokens);
+          if (data.config.context_message_window !== undefined) setContextWindow(data.config.context_message_window);
+          if (data.config.rag_top_k !== undefined) setRagTopK(data.config.rag_top_k);
+          if (data.config.rag_similarity_threshold !== undefined) setSimilarityThreshold(data.config.rag_similarity_threshold);
+          if (data.config.confidence_threshold !== undefined) setConfidenceThreshold(data.config.confidence_threshold);
+          if (Array.isArray(data.config.guardrails)) setGuardrails(data.config.guardrails);
+        }
       }
     } catch {
       toast.error(t('loadFailed'));
@@ -819,6 +861,15 @@ export function AiConfig() {
     auto_reply_enabled: autoReplyEnabled,
     auto_reply_max_per_conversation: maxPerConversation,
     handoff_agent_id: handoffAgentId || null,
+    config: {
+      temperature,
+      max_tokens: maxTokens,
+      context_message_window: contextWindow,
+      rag_top_k: ragTopK,
+      rag_similarity_threshold: similarityThreshold,
+      confidence_threshold: confidenceThreshold,
+      guardrails,
+    },
   });
 
   const handleTest = async () => {
@@ -1193,7 +1244,23 @@ export function AiConfig() {
           }
         />
 
-        <AiAdvancedParamsCard disabled={disabled} />
+        <AiAdvancedParamsCard
+          temperature={temperature}
+          setTemperature={setTemperature}
+          maxTokens={maxTokens}
+          setMaxTokens={setMaxTokens}
+          contextWindow={contextWindow}
+          setContextWindow={setContextWindow}
+          ragTopK={ragTopK}
+          setRagTopK={setRagTopK}
+          similarityThreshold={similarityThreshold}
+          setSimilarityThreshold={setSimilarityThreshold}
+          confidenceThreshold={confidenceThreshold}
+          setConfidenceThreshold={setConfidenceThreshold}
+          guardrails={guardrails}
+          setGuardrails={setGuardrails}
+          disabled={disabled}
+        />
 
         <div className="flex items-center justify-between">
           {configured ? (

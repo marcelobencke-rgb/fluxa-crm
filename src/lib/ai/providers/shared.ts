@@ -11,6 +11,8 @@ export interface ProviderArgs {
   messages: ChatMessage[]
   timeoutMs: number
   tools?: any[]
+  temperature?: number
+  maxTokens?: number
 }
 
 /**

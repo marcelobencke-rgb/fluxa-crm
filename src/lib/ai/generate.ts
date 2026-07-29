@@ -34,6 +34,8 @@ export async function generateReply(args: GenerateArgs): Promise<GenerateResult>
     messages,
     timeoutMs,
     tools,
+    temperature: config.config?.temperature ?? 0.3,
+    maxTokens: config.config?.max_tokens ?? 1024,
   }
 
   let result: { text: string; usage: AiUsage | null; tool_calls?: any[] }

@@ -60,7 +60,8 @@ export async function generateOpenAi(args: ProviderArgs): Promise<ProviderResult
             return msg
           }),
         ],
-        max_completion_tokens: MAX_OUTPUT_TOKENS,
+        max_completion_tokens: args.maxTokens ?? MAX_OUTPUT_TOKENS,
+        temperature: args.temperature ?? 0.3,
         ...(args.tools?.length ? { tools: args.tools } : {}),
       }),
       signal: AbortSignal.timeout(timeoutMs),

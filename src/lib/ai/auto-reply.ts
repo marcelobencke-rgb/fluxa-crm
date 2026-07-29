@@ -10,6 +10,10 @@ import { logAiUsage } from './usage'
 import { latestUserMessage } from './query'
 import { engineSendText } from '@/lib/flows/meta-send'
 import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit'
+import {
+  evaluatePreGenerationGuardrails,
+  evaluatePostGenerationGuardrails,
+} from './guardrails'
 
 interface DispatchArgs {
   /** Tenancy key — drives config, contact, and whatsapp_config lookups. */
@@ -92,7 +96,11 @@ export async function dispatchInboundToAiReply(
       return
     }
 
-    const messages = await buildConversationContext(db, conversationId)
+    const messages = await buildConversationContext(
+      db,
+      conversationId,
+      config.config?.context_message_window,
+    )
     if (messages.length === 0) {
       console.log('[ai auto-reply] early exit: buildConversationContext returned 0 text messages')
       return
@@ -120,7 +128,30 @@ export async function dispatchInboundToAiReply(
       accountId,
       config,
       latestUserMessage(messages),
+      config.config?.rag_top_k,
     )
+
+    // Evaluate Pre-Generation Guardrails (operating hours, input regex, RAG minimum hits)
+    const preCheck = evaluatePreGenerationGuardrails(
+      config.config?.guardrails,
+      latestUserMessage(messages),
+      knowledge.length,
+    )
+    if (!preCheck.allowed) {
+      console.log('[ai auto-reply] pre-generation guardrail blocked:', preCheck.reason)
+      if (preCheck.handoff) {
+        const summary = `Guardrail bloqueou o atendimento: ${preCheck.reason}`
+        const update: Record<string, unknown> = {
+          ai_autoreply_disabled: true,
+          ai_handoff_summary: summary,
+        }
+        if (config.handoffAgentId && !conv.assigned_agent_id) {
+          update.assigned_agent_id = config.handoffAgentId
+        }
+        await db.from('conversations').update(update).eq('id', conversationId)
+      }
+      return
+    }
 
     const systemPrompt = buildSystemPrompt({
       userPrompt: config.systemPrompt,
@@ -169,6 +200,16 @@ export async function dispatchInboundToAiReply(
       } else {
         break
       }
+    }
+
+    const postCheck = evaluatePostGenerationGuardrails(
+      config.config?.guardrails,
+      replyText,
+    )
+    if (!postCheck.allowed) {
+      console.log('[ai auto-reply] post-generation guardrail blocked:', postCheck.reason)
+      isHandoff = true
+      replyText = ''
     }
 
     // Record token spend on the account's BYO key. Fire-and-forget so it

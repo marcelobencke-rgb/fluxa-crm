@@ -8,6 +8,34 @@
 
 export type AiProvider = 'openai' | 'anthropic'
 
+export interface GuardrailItem {
+  kind:
+    | 'regex_output_block'
+    | 'rag_must_hit'
+    | 'regex_input_block'
+    | 'window_check'
+    | 'contact_flag'
+  reason: string
+  pattern?: string
+  flags?: string
+  min_citations?: number
+  start_hour?: number
+  end_hour?: number
+  timezone?: string
+  field?: string
+  expected?: boolean
+}
+
+export interface AiAdvancedConfig {
+  temperature?: number
+  max_tokens?: number
+  context_message_window?: number
+  rag_top_k?: number
+  rag_similarity_threshold?: number
+  confidence_threshold?: number
+  guardrails?: GuardrailItem[]
+}
+
 /**
  * Account AI setup, decrypted and ready to use. Produced by
  * `loadAiConfig` — `apiKey` is the plaintext BYO provider key
@@ -29,6 +57,8 @@ export interface AiConfig {
    *  knowledge base is embedded and semantic retrieval turns on; when
    *  null, retrieval falls back to lexical full-text search. */
   embeddingsApiKey: string | null
+  /** Optional advanced knobs (LLM parameters, RAG settings, and guardrails). */
+  config?: AiAdvancedConfig
 }
 
 /** A single conversation turn in the shape both providers accept. */

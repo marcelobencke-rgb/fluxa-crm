@@ -207,6 +207,217 @@ Você NÃO inventa preços, prazos ou promoções. Baseie-se apenas nos document
   );
 }
 
+function AiAdvancedParamsCard({ disabled }: { disabled?: boolean }) {
+  const [temperature, setTemperature] = useState(0.3);
+  const [maxTokens, setMaxTokens] = useState(1024);
+  const [contextWindow, setContextWindow] = useState(20);
+  const [ragTopK, setRagTopK] = useState(5);
+  const [similarityThreshold, setSimilarityThreshold] = useState(0.72);
+  const [confidenceThreshold, setConfidenceThreshold] = useState(0.55);
+  const [guardrails, setGuardrails] = useState<
+    { id: string; type: string; title: string; desc: string; active: boolean }[]
+  >([
+    {
+      id: 'g1',
+      type: 'regex_output',
+      title: 'Regex output block',
+      desc: 'Bloquear palavras, preços inverossímeis ou conteúdo sensível nas respostas geradas pela IA.',
+      active: true,
+    },
+    {
+      id: 'g2',
+      type: 'rag_must_hit',
+      title: 'RAG must hit',
+      desc: 'Obrigatório encontrar conteúdo relevante na Base de Conhecimento; caso contrário, escala via [[HANDOFF]].',
+      active: true,
+    },
+    {
+      id: 'g3',
+      type: 'regex_input',
+      title: 'Regex input block',
+      desc: 'Bloquear e filtrar mensagens ofensivas, spam ou maliciosas recebidas dos clientes.',
+      active: false,
+    },
+    {
+      id: 'g4',
+      type: 'janela_horaria',
+      title: 'Janela horária',
+      desc: 'Limitar horários em que o agente virtual autônomo tem permissão para responder automaticamente.',
+      active: false,
+    },
+    {
+      id: 'g5',
+      type: 'contact_flag',
+      title: 'Contact flag',
+      desc: 'Restringir a atuação da IA apenas para contatos que possuam determinadas tags ou perfil.',
+      active: false,
+    },
+  ]);
+
+  const toggleGuardrail = (id: string) => {
+    setGuardrails((prev) =>
+      prev.map((g) => (g.id === id ? { ...g, active: !g.active } : g)),
+    );
+    toast.success('Proteção de Guardrail atualizada!');
+  };
+
+  return (
+    <Card className="border-primary/20 shadow-sm">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Sparkles className="h-4 w-4 text-primary" />
+          Parâmetros Avançados do Agente (Modelo, RAG e Guardrails)
+        </CardTitle>
+        <CardDescription>
+          Ajuste fino da criatividade, precisão de busca semântica na Base de Conhecimento e regras de segurança.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {/* MODELO (LLM KNOBS) */}
+        <div className="space-y-3 rounded-lg border border-border/70 bg-card p-4">
+          <h4 className="font-semibold text-sm text-foreground flex items-center gap-2">
+            🧠 Parâmetros do Modelo (LLM Knobs)
+          </h4>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Temperature (0–2)</Label>
+              <Input
+                type="number"
+                step="0.05"
+                min={0}
+                max={2}
+                value={temperature}
+                onChange={(e) => setTemperature(Number(e.target.value))}
+                disabled={disabled}
+                className="h-8 text-xs"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Controla a criatividade. Padrão 0,3 = respostas precisas e fiéis à empresa.
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Max tokens (64–4096)</Label>
+              <Input
+                type="number"
+                step="64"
+                min={64}
+                max={4096}
+                value={maxTokens}
+                onChange={(e) => setMaxTokens(Number(e.target.value))}
+                disabled={disabled}
+                className="h-8 text-xs"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Tamanho máximo em tokens de cada resposta gerada (1024 ≈ 750 palavras).
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Janela de contexto (msgs, 1–50)</Label>
+              <Input
+                type="number"
+                step="1"
+                min={1}
+                max={50}
+                value={contextWindow}
+                onChange={(e) => setContextWindow(Number(e.target.value))}
+                disabled={disabled}
+                className="h-8 text-xs"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Memória do bot: quantas mensagens anteriores da conversa ele analisa para responder.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* PARÂMETROS RAG */}
+        <div className="space-y-3 rounded-lg border border-border/70 bg-card p-4">
+          <h4 className="font-semibold text-sm text-foreground flex items-center gap-2">
+            📚 Parâmetros de Busca na Base de Conhecimento (RAG)
+          </h4>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Top K (1–20)</Label>
+              <Input
+                type="number"
+                step="1"
+                min={1}
+                max={20}
+                value={ragTopK}
+                onChange={(e) => setRagTopK(Number(e.target.value))}
+                disabled={disabled}
+                className="h-8 text-xs"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Similarity threshold (0–1)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min={0}
+                max={1}
+                value={similarityThreshold}
+                onChange={(e) => setSimilarityThreshold(Number(e.target.value))}
+                disabled={disabled}
+                className="h-8 text-xs"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Confidence threshold (0–1)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min={0}
+                max={1}
+                value={confidenceThreshold}
+                onChange={(e) => setConfidenceThreshold(Number(e.target.value))}
+                disabled={disabled}
+                className="h-8 text-xs"
+              />
+            </div>
+          </div>
+          <p className="text-[11px] text-muted-foreground rounded bg-muted/40 p-2 border border-border/30">
+            <strong>Top K</strong> = quantos trechos buscar. <strong>Similarity threshold</strong> = mínimo de relevância (cosine) para considerar o trecho. <strong>Confidence</strong> = limiar de certeza abaixo do qual o agent escala automaticamente para humano.
+          </p>
+        </div>
+
+        {/* GUARDRAILS */}
+        <div className="space-y-3 rounded-lg border border-border/70 bg-card p-4">
+          <h4 className="font-semibold text-sm text-foreground flex items-center justify-between">
+            <span>🛡️ Guardrails & Regras de Conformidade</span>
+            <span className="text-xs font-normal text-muted-foreground">
+              Ative proteções para bloquear conteúdos ou impor regras
+            </span>
+          </h4>
+          <div className="space-y-2.5">
+            {guardrails.map((g) => (
+              <div
+                key={g.id}
+                className="flex items-center justify-between gap-4 rounded-md border border-border/60 bg-muted/20 p-2.5 hover:bg-muted/40 transition-colors"
+              >
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold text-foreground">{g.title}</span>
+                    <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary">
+                      {g.type}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">{g.desc}</p>
+                </div>
+                <Switch
+                  checked={g.active}
+                  onCheckedChange={() => toggleGuardrail(g.id)}
+                  disabled={disabled}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function AiConfig() {
   const { accountId, accountRole, profileLoading } = useAuth();
   const canEdit = accountRole ? canEditSettings(accountRole) : false;
@@ -691,6 +902,8 @@ export function AiConfig() {
               : hasStoredEmbeddingsKey
           }
         />
+
+        <AiAdvancedParamsCard disabled={disabled} />
 
         <div className="flex items-center justify-between">
           {configured ? (

@@ -207,6 +207,236 @@ Você NÃO inventa preços, prazos ou promoções. Baseie-se apenas nos document
   );
 }
 
+type GuardrailKind =
+  | 'regex_output_block'
+  | 'rag_must_hit'
+  | 'regex_input_block'
+  | 'window_check'
+  | 'contact_flag';
+
+interface GuardrailItem {
+  kind: GuardrailKind;
+  reason: string;
+  pattern?: string;
+  flags?: string;
+  min_citations?: number;
+  start_hour?: number;
+  end_hour?: number;
+  timezone?: string;
+  field?: string;
+  expected?: boolean;
+}
+
+const GUARDRAIL_KIND_LABELS: Record<GuardrailKind, string> = {
+  regex_output_block: 'Regex output block',
+  rag_must_hit: 'RAG must hit',
+  regex_input_block: 'Regex input block',
+  window_check: 'Janela horária',
+  contact_flag: 'Contact flag',
+};
+
+function defaultGuardrailForKind(kind: GuardrailKind): GuardrailItem {
+  switch (kind) {
+    case 'regex_output_block':
+      return {
+        kind: 'regex_output_block',
+        pattern: '',
+        flags: 'i',
+        reason: 'Bloquear conteúdo sensível na resposta',
+      };
+    case 'rag_must_hit':
+      return {
+        kind: 'rag_must_hit',
+        min_citations: 1,
+        reason: 'Exigir citação da base',
+      };
+    case 'regex_input_block':
+      return {
+        kind: 'regex_input_block',
+        pattern: '',
+        flags: 'i',
+        reason: 'Bloquear input com termo proibido',
+      };
+    case 'window_check':
+      return {
+        kind: 'window_check',
+        start_hour: 7,
+        end_hour: 22,
+        timezone: 'America/Sao_Paulo',
+        reason: 'Janela operacional 7h-22h',
+      };
+    case 'contact_flag':
+      return {
+        kind: 'contact_flag',
+        field: 'force_human',
+        expected: false,
+        reason: 'Skip se contato pediu humano',
+      };
+  }
+}
+
+function isGuardrailInvalid(item: GuardrailItem): boolean {
+  if (
+    item.kind === 'regex_output_block' ||
+    item.kind === 'regex_input_block'
+  ) {
+    if (!item.pattern || !item.pattern.trim()) return true;
+    try {
+      new RegExp(item.pattern, item.flags || 'i');
+    } catch {
+      return true;
+    }
+  }
+  return false;
+}
+
+function GuardrailFields({
+  item,
+  onPatch,
+  disabled,
+}: {
+  item: GuardrailItem;
+  onPatch: (p: Partial<GuardrailItem>) => void;
+  disabled?: boolean;
+}) {
+  const reasonField = (
+    <div className="space-y-1">
+      <Label className="text-xs">Motivo</Label>
+      <Input
+        value={item.reason}
+        onChange={(e) => onPatch({ reason: e.target.value })}
+        disabled={disabled}
+        className="h-8 text-xs"
+      />
+    </div>
+  );
+
+  if (item.kind === 'regex_output_block' || item.kind === 'regex_input_block') {
+    return (
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        <div className="space-y-1 md:col-span-2">
+          <Label className="text-xs">Pattern (regex)</Label>
+          <Input
+            value={item.pattern ?? ''}
+            onChange={(e) => onPatch({ pattern: e.target.value })}
+            disabled={disabled}
+            className="font-mono h-8 text-xs"
+          />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Flags</Label>
+          <Input
+            value={item.flags ?? 'i'}
+            onChange={(e) => onPatch({ flags: e.target.value })}
+            disabled={disabled}
+            className="font-mono h-8 text-xs"
+          />
+        </div>
+        <div className="md:col-span-3">{reasonField}</div>
+      </div>
+    );
+  }
+
+  if (item.kind === 'rag_must_hit') {
+    return (
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        <div className="space-y-1">
+          <Label className="text-xs">Citações mínimas</Label>
+          <Input
+            type="number"
+            min={1}
+            max={10}
+            value={item.min_citations ?? 1}
+            onChange={(e) =>
+              onPatch({
+                min_citations: Number(e.target.value) || 1,
+              })
+            }
+            disabled={disabled}
+            className="h-8 text-xs"
+          />
+        </div>
+        <div className="md:col-span-2">{reasonField}</div>
+      </div>
+    );
+  }
+
+  if (item.kind === 'window_check') {
+    return (
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+        <div className="space-y-1">
+          <Label className="text-xs">Hora início (0–23)</Label>
+          <Input
+            type="number"
+            min={0}
+            max={23}
+            value={item.start_hour ?? 7}
+            onChange={(e) => onPatch({ start_hour: Number(e.target.value) })}
+            disabled={disabled}
+            className="h-8 text-xs"
+          />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Hora fim (0–23)</Label>
+          <Input
+            type="number"
+            min={0}
+            max={23}
+            value={item.end_hour ?? 22}
+            onChange={(e) => onPatch({ end_hour: Number(e.target.value) })}
+            disabled={disabled}
+            className="h-8 text-xs"
+          />
+        </div>
+        <div className="space-y-1 md:col-span-2">
+          <Label className="text-xs">Timezone</Label>
+          <Input
+            value={item.timezone ?? 'America/Sao_Paulo'}
+            onChange={(e) => onPatch({ timezone: e.target.value })}
+            disabled={disabled}
+            className="h-8 text-xs"
+          />
+        </div>
+        <div className="md:col-span-4">{reasonField}</div>
+      </div>
+    );
+  }
+
+  // contact_flag
+  return (
+    <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+      <div className="space-y-1">
+        <Label className="text-xs">Campo</Label>
+        <Select
+          value={item.field ?? 'force_human'}
+          onValueChange={(v) => onPatch({ field: v || undefined })}
+          disabled={disabled}
+        >
+          <SelectTrigger className="h-8 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="force_human">force_human</SelectItem>
+            <SelectItem value="is_blocked">is_blocked</SelectItem>
+            <SelectItem value="is_vip">is_vip</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="flex items-center gap-2 pt-6">
+        <Switch
+          checked={item.expected ?? false}
+          onCheckedChange={(v) => onPatch({ expected: v })}
+          disabled={disabled}
+        />
+        <Label className="text-xs">
+          Valor esperado: {item.expected ? 'true' : 'false'}
+        </Label>
+      </div>
+      <div className="md:col-span-3">{reasonField}</div>
+    </div>
+  );
+}
+
 function AiAdvancedParamsCard({ disabled }: { disabled?: boolean }) {
   const [temperature, setTemperature] = useState(0.3);
   const [maxTokens, setMaxTokens] = useState(1024);
@@ -214,52 +444,42 @@ function AiAdvancedParamsCard({ disabled }: { disabled?: boolean }) {
   const [ragTopK, setRagTopK] = useState(5);
   const [similarityThreshold, setSimilarityThreshold] = useState(0.72);
   const [confidenceThreshold, setConfidenceThreshold] = useState(0.55);
-  const [guardrails, setGuardrails] = useState<
-    { id: string; type: string; title: string; desc: string; active: boolean }[]
-  >([
+
+  const [pendingKind, setPendingKind] =
+    useState<GuardrailKind>('window_check');
+
+  const [guardrails, setGuardrails] = useState<GuardrailItem[]>([
     {
-      id: 'g1',
-      type: 'regex_output',
-      title: 'Regex output block',
-      desc: 'Bloquear palavras, preços inverossímeis ou conteúdo sensível nas respostas geradas pela IA.',
-      active: true,
+      kind: 'window_check',
+      start_hour: 7,
+      end_hour: 22,
+      timezone: 'America/Sao_Paulo',
+      reason: 'Janela operacional 7h-22h',
     },
     {
-      id: 'g2',
-      type: 'rag_must_hit',
-      title: 'RAG must hit',
-      desc: 'Obrigatório encontrar conteúdo relevante na Base de Conhecimento; caso contrário, escala via [[HANDOFF]].',
-      active: true,
-    },
-    {
-      id: 'g3',
-      type: 'regex_input',
-      title: 'Regex input block',
-      desc: 'Bloquear e filtrar mensagens ofensivas, spam ou maliciosas recebidas dos clientes.',
-      active: false,
-    },
-    {
-      id: 'g4',
-      type: 'janela_horaria',
-      title: 'Janela horária',
-      desc: 'Limitar horários em que o agente virtual autônomo tem permissão para responder automaticamente.',
-      active: false,
-    },
-    {
-      id: 'g5',
-      type: 'contact_flag',
-      title: 'Contact flag',
-      desc: 'Restringir a atuação da IA apenas para contatos que possuam determinadas tags ou perfil.',
-      active: false,
+      kind: 'rag_must_hit',
+      min_citations: 1,
+      reason: 'Exigir citação da base',
     },
   ]);
 
-  const toggleGuardrail = (id: string) => {
+  function updateGuardrail(idx: number, patch: Partial<GuardrailItem>) {
     setGuardrails((prev) =>
-      prev.map((g) => (g.id === id ? { ...g, active: !g.active } : g)),
+      prev.map((it, i) =>
+        i === idx ? ({ ...it, ...patch } as GuardrailItem) : it,
+      ),
     );
-    toast.success('Proteção de Guardrail atualizada!');
-  };
+  }
+
+  function removeGuardrail(idx: number) {
+    setGuardrails((prev) => prev.filter((_, i) => i !== idx));
+    toast.success('Guardrail removido');
+  }
+
+  function addGuardrail() {
+    setGuardrails((prev) => [...prev, defaultGuardrailForKind(pendingKind)]);
+    toast.success('Novo guardrail adicionado! Configure os campos abaixo.');
+  }
 
   return (
     <Card className="border-primary/20 shadow-sm">
@@ -269,7 +489,8 @@ function AiAdvancedParamsCard({ disabled }: { disabled?: boolean }) {
           Parâmetros Avançados do Agente (Modelo, RAG e Guardrails)
         </CardTitle>
         <CardDescription>
-          Ajuste fino da criatividade, precisão de busca semântica na Base de Conhecimento e regras de segurança.
+          Ajuste fino da criatividade, precisão de busca semântica na Base de
+          Conhecimento e regras de segurança.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -292,11 +513,14 @@ function AiAdvancedParamsCard({ disabled }: { disabled?: boolean }) {
                 className="h-8 text-xs"
               />
               <p className="text-[11px] text-muted-foreground">
-                Controla a criatividade. Padrão 0,3 = respostas precisas e fiéis à empresa.
+                Controla a criatividade. Padrão 0,3 = respostas precisas e fiéis
+                à empresa.
               </p>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Max tokens (64–4096)</Label>
+              <Label className="text-xs font-medium">
+                Max tokens (64–4096)
+              </Label>
               <Input
                 type="number"
                 step="64"
@@ -308,11 +532,14 @@ function AiAdvancedParamsCard({ disabled }: { disabled?: boolean }) {
                 className="h-8 text-xs"
               />
               <p className="text-[11px] text-muted-foreground">
-                Tamanho máximo em tokens de cada resposta gerada (1024 ≈ 750 palavras).
+                Tamanho máximo em tokens de cada resposta gerada (1024 ≈ 750
+                palavras).
               </p>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Janela de contexto (msgs, 1–50)</Label>
+              <Label className="text-xs font-medium">
+                Janela de contexto (msgs, 1–50)
+              </Label>
               <Input
                 type="number"
                 step="1"
@@ -324,7 +551,8 @@ function AiAdvancedParamsCard({ disabled }: { disabled?: boolean }) {
                 className="h-8 text-xs"
               />
               <p className="text-[11px] text-muted-foreground">
-                Memória do bot: quantas mensagens anteriores da conversa ele analisa para responder.
+                Memória do bot: quantas mensagens anteriores da conversa ele
+                analisa para responder.
               </p>
             </div>
           </div>
@@ -350,7 +578,9 @@ function AiAdvancedParamsCard({ disabled }: { disabled?: boolean }) {
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Similarity threshold (0–1)</Label>
+              <Label className="text-xs font-medium">
+                Similarity threshold (0–1)
+              </Label>
               <Input
                 type="number"
                 step="0.01"
@@ -363,7 +593,9 @@ function AiAdvancedParamsCard({ disabled }: { disabled?: boolean }) {
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Confidence threshold (0–1)</Label>
+              <Label className="text-xs font-medium">
+                Confidence threshold (0–1)
+              </Label>
               <Input
                 type="number"
                 step="0.01"
@@ -377,41 +609,99 @@ function AiAdvancedParamsCard({ disabled }: { disabled?: boolean }) {
             </div>
           </div>
           <p className="text-[11px] text-muted-foreground rounded bg-muted/40 p-2 border border-border/30">
-            <strong>Top K</strong> = quantos trechos buscar. <strong>Similarity threshold</strong> = mínimo de relevância (cosine) para considerar o trecho. <strong>Confidence</strong> = limiar de certeza abaixo do qual o agent escala automaticamente para humano.
+            <strong>Top K</strong> = quantos trechos buscar. <strong>Similarity threshold</strong> = mínimo de relevância (cosine) para
+            considerar o trecho. <strong>Confidence</strong> = limiar de certeza
+            abaixo do qual o agent escala automaticamente para humano.
           </p>
         </div>
 
-        {/* GUARDRAILS */}
-        <div className="space-y-3 rounded-lg border border-border/70 bg-card p-4">
+        {/* GUARDRAILS - EDITOR DINÂMICO */}
+        <div className="space-y-4 rounded-lg border border-border/70 bg-card p-4">
           <h4 className="font-semibold text-sm text-foreground flex items-center justify-between">
             <span>🛡️ Guardrails & Regras de Conformidade</span>
             <span className="text-xs font-normal text-muted-foreground">
-              Ative proteções para bloquear conteúdos ou impor regras
+              Ative proteções e defina as condições específicas abaixo
             </span>
           </h4>
-          <div className="space-y-2.5">
-            {guardrails.map((g) => (
-              <div
-                key={g.id}
-                className="flex items-center justify-between gap-4 rounded-md border border-border/60 bg-muted/20 p-2.5 hover:bg-muted/40 transition-colors"
+
+          {/* Adicionar novo guardrail */}
+          <div className="flex items-end gap-2">
+            <div className="flex-1 space-y-1">
+              <Label className="text-xs">Tipo do novo guardrail</Label>
+              <Select
+                value={pendingKind}
+                onValueChange={(v) => setPendingKind(v as GuardrailKind)}
+                disabled={disabled}
               >
-                <div className="space-y-0.5">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-foreground">{g.title}</span>
-                    <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary">
-                      {g.type}
-                    </span>
-                  </div>
-                  <p className="text-xs text-muted-foreground">{g.desc}</p>
-                </div>
-                <Switch
-                  checked={g.active}
-                  onCheckedChange={() => toggleGuardrail(g.id)}
-                  disabled={disabled}
-                />
-              </div>
-            ))}
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(Object.keys(GUARDRAIL_KIND_LABELS) as GuardrailKind[]).map(
+                    (k) => (
+                      <SelectItem key={k} value={k}>
+                        {GUARDRAIL_KIND_LABELS[k]}
+                      </SelectItem>
+                    ),
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button
+              type="button"
+              onClick={addGuardrail}
+              disabled={disabled}
+              className="bg-emerald-700 hover:bg-emerald-800 text-white h-9 text-xs font-medium px-4"
+            >
+              Adicionar guardrail
+            </Button>
           </div>
+
+          {guardrails.length === 0 ? (
+            <p className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+              Nenhum guardrail definido. O agente responde sem restrições adicionais.
+            </p>
+          ) : (
+            <ul className="space-y-3">
+              {guardrails.map((item, idx) => {
+                const invalid = isGuardrailInvalid(item);
+                return (
+                  <li
+                    key={idx}
+                    className={`rounded-md border p-3.5 bg-muted/10 transition-colors ${
+                      invalid ? 'border-destructive/60 bg-destructive/5' : 'border-border/60'
+                    }`}
+                  >
+                    <div className="mb-3 flex items-center justify-between gap-2 border-b border-border/40 pb-2">
+                      <span className="text-xs font-bold uppercase tracking-wide text-foreground">
+                        {GUARDRAIL_KIND_LABELS[item.kind]}
+                      </span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => removeGuardrail(idx)}
+                        disabled={disabled}
+                        className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
+                      >
+                        Remover
+                      </Button>
+                    </div>
+                    <GuardrailFields
+                      item={item}
+                      onPatch={(p) => updateGuardrail(idx, p)}
+                      disabled={disabled}
+                    />
+                    {invalid && (
+                      <p className="mt-2 text-xs font-medium text-destructive">
+                        Campos inválidos. Ajuste antes de salvar.
+                      </p>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </div>
       </CardContent>
     </Card>

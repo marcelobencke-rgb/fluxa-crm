@@ -5,7 +5,20 @@ import { toast } from 'sonner';
 import { Bot, RotateCcw, Send, Loader2, UserCircle2, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useTranslations } from 'next-intl';
+
+interface AiAgentOption {
+  id: string;
+  name?: string;
+  is_active: boolean;
+}
 
 interface Turn {
   role: 'user' | 'assistant';
@@ -20,6 +33,50 @@ export function AiPlayground({ onGoToSetup }: { onGoToSetup?: () => void }) {
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const [agents, setAgents] = useState<AiAgentOption[]>([]);
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    void fetch('/api/ai/config')
+      .then((r) => r.json())
+      .then((data) => {
+        if (!active || !data?.agents || !Array.isArray(data.agents)) return;
+        setAgents(data.agents);
+        const storedId =
+          typeof window !== 'undefined'
+            ? window.localStorage.getItem('wacrm_ai_selected_agent_id')
+            : null;
+        const matched = data.agents.find((a: AiAgentOption) => a.id === storedId);
+        const activeAgent = data.agents.find((a: AiAgentOption) => a.is_active);
+        const initial = matched ? matched.id : activeAgent ? activeAgent.id : data.agents[0]?.id || null;
+        setSelectedAgentId(initial);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const handleSelectVersion = (id: string | null) => {
+    if (!id) return;
+    setSelectedAgentId(id);
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem('wacrm_ai_selected_agent_id', id);
+      } catch {}
+    }
+    const agent = agents.find((a) => a.id === id);
+    if (agent) {
+      toast.success(`Playground testando versão: ${agent.name || 'Agente'}`);
+    }
+  };
+
+  const selectedAgentObj = agents.find((a) => a.id === selectedAgentId);
+  const selectedAgentLabel = selectedAgentObj
+    ? `${selectedAgentObj.is_active ? '🟢 [Publicado] ' : '⚪ [Rascunho] '}${selectedAgentObj.name || 'Agente'}`
+    : 'Versão Ativa';
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
@@ -39,6 +96,7 @@ export function AiPlayground({ onGoToSetup }: { onGoToSetup?: () => void }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: next.map((t) => ({ role: t.role, content: t.content })),
+          agent_id: selectedAgentId || undefined,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -82,7 +140,7 @@ export function AiPlayground({ onGoToSetup }: { onGoToSetup?: () => void }) {
   return (
     <div className="flex h-[60vh] min-h-[420px] flex-col rounded-xl border border-border bg-card">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
+      <div className="flex flex-col gap-2 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
           <Bot className="h-4 w-4 text-primary" />
           <span className="text-sm font-medium text-foreground">Playground</span>
@@ -90,15 +148,39 @@ export function AiPlayground({ onGoToSetup }: { onGoToSetup?: () => void }) {
             {t('subtitle')}
           </span>
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setTurns([])}
-          disabled={turns.length === 0 || sending}
-          className="text-muted-foreground"
-        >
-          <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> {t('reset')}
-        </Button>
+        <div className="flex items-center gap-2">
+          {agents.length > 0 && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-medium text-muted-foreground">Testar Versão:</span>
+              <Select
+                value={selectedAgentId || undefined}
+                onValueChange={handleSelectVersion}
+                disabled={sending}
+              >
+                <SelectTrigger className="h-8 w-[230px] text-xs">
+                  <SelectValue>{selectedAgentLabel}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {agents.map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.is_active ? '🟢 [Publicado] ' : '⚪ [Rascunho] '}
+                      {a.name || 'Agente'}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setTurns([])}
+            disabled={turns.length === 0 || sending}
+            className="text-muted-foreground"
+          >
+            <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> {t('reset')}
+          </Button>
+        </div>
       </div>
 
       {/* Transcript */}

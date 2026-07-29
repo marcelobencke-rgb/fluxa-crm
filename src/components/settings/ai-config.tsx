@@ -817,6 +817,11 @@ export function AiConfig() {
 
   const populateAgentState = useCallback((agent: AiAgentSummary) => {
     setSelectedAgentId(agent.id || null);
+    if (agent.id && typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem('wacrm_ai_selected_agent_id', agent.id);
+      } catch {}
+    }
     setAgentName(agent.name || 'Agente Principal (V1)');
     setAgentDesc(agent.description || '');
     setProvider(agent.provider || 'openai');

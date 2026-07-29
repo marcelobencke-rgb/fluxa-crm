@@ -50,4 +50,13 @@ describe('loadAiConfig requireActive', () => {
       await loadAiConfig(dbReturning(null), 'acct', { requireActive: false }),
     ).toBeNull()
   })
+
+  it('returns the specific config when agentId is passed', async () => {
+    const config = await loadAiConfig(dbReturning(ROW), 'acct', {
+      requireActive: false,
+      agentId: 'fee7d80b-1111-2222-3333-444444444444',
+    })
+    expect(config).not.toBeNull()
+    expect(config!.provider).toBe('openai')
+  })
 })

@@ -29,6 +29,8 @@ export async function POST(request: Request) {
     if (!limit.success) return rateLimitResponse(limit)
 
     const body = await request.json().catch(() => null)
+    const agentId =
+      typeof body?.agent_id === 'string' && body.agent_id ? body.agent_id : undefined
     const rawMessages = Array.isArray(body?.messages) ? body.messages : null
     if (!rawMessages) {
       return NextResponse.json({ error: 'messages is required' }, { status: 400 })
@@ -55,6 +57,7 @@ export async function POST(request: Request) {
 
     const config = await loadAiConfig(supabase, accountId, {
       requireActive: false,
+      agentId,
     }).catch((err) => {
       console.error('[ai/playground] loadAiConfig error:', err)
       throw new AiError('Stored API key could not be decrypted.', {

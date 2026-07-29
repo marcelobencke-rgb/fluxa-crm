@@ -35,16 +35,18 @@ const CONFIG_COLUMNS =
 export async function loadAiConfig(
   db: SupabaseClient,
   accountId: string,
-  opts: { requireActive?: boolean } = {},
+  opts: { requireActive?: boolean; agentId?: string } = {},
 ): Promise<AiConfig | null> {
-  const { requireActive = true } = opts
+  const { requireActive = true, agentId } = opts
 
   let query = db
     .from('ai_configs')
     .select(CONFIG_COLUMNS)
     .eq('account_id', accountId)
 
-  if (requireActive) {
+  if (agentId) {
+    query = query.eq('id', agentId)
+  } else if (requireActive) {
     query = query.eq('is_active', true)
   }
 

@@ -228,11 +228,11 @@ interface GuardrailItem {
 }
 
 const GUARDRAIL_KIND_LABELS: Record<GuardrailKind, string> = {
-  regex_output_block: 'Regex output block',
-  rag_must_hit: 'RAG must hit',
-  regex_input_block: 'Regex input block',
-  window_check: 'Janela horária',
-  contact_flag: 'Contact flag',
+  regex_output_block: 'Bloqueio de saída por Regex',
+  rag_must_hit: 'Exigir citação da Base (RAG)',
+  regex_input_block: 'Bloqueio de entrada por Regex',
+  window_check: 'Janela horária de atendimento',
+  contact_flag: 'Restrição por flag de contato',
 };
 
 function defaultGuardrailForKind(kind: GuardrailKind): GuardrailItem {
@@ -634,7 +634,7 @@ function AiAdvancedParamsCard({ disabled }: { disabled?: boolean }) {
                 disabled={disabled}
               >
                 <SelectTrigger className="h-9 text-xs">
-                  <SelectValue />
+                  <SelectValue>{GUARDRAIL_KIND_LABELS[pendingKind]}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {(Object.keys(GUARDRAIL_KIND_LABELS) as GuardrailKind[]).map(

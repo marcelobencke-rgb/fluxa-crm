@@ -42,6 +42,9 @@ export interface AiAdvancedConfig {
  * (stored AES-256-GCM-encrypted at rest).
  */
 export interface AiConfig {
+  id?: string
+  name?: string
+  description?: string | null
   provider: AiProvider
   model: string
   apiKey: string

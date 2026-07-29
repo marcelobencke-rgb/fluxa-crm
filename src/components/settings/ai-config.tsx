@@ -18,6 +18,7 @@ import {
 import { useAuth } from '@/hooks/use-auth';
 import { canEditSettings } from '@/lib/auth/roles';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -720,10 +721,41 @@ function AiAdvancedParamsCard({
   );
 }
 
+interface AiAgentSummary {
+  id: string;
+  name?: string;
+  description?: string | null;
+  provider: AiProvider;
+  model: string;
+  system_prompt?: string | null;
+  is_active: boolean;
+  auto_reply_enabled: boolean;
+  auto_reply_max_per_conversation?: number;
+  handoff_agent_id?: string | null;
+  has_key?: boolean;
+  has_embeddings_key?: boolean;
+  config?: {
+    temperature?: number;
+    max_tokens?: number;
+    context_message_window?: number;
+    rag_top_k?: number;
+    rag_similarity_threshold?: number;
+    confidence_threshold?: number;
+    guardrails?: GuardrailItem[];
+  };
+}
+
 export function AiConfig() {
   const { accountId, accountRole, profileLoading } = useAuth();
   const canEdit = accountRole ? canEditSettings(accountRole) : false;
   const t = useTranslations('Settings.aiConfig');
+
+  const [agents, setAgents] = useState<AiAgentSummary[]>([]);
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
+  const [agentName, setAgentName] = useState('Agente Principal (V1)');
+  const [agentDesc, setAgentDesc] = useState('');
+  const [duplicating, setDuplicating] = useState(false);
+  const [publishing, setPublishing] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -783,7 +815,36 @@ export function AiConfig() {
   // the loadedAccountIdRef pattern in whatsapp-config.tsx.
   const loadedAccountIdRef = useRef<string | null>(null);
 
-  const fetchConfig = useCallback(async () => {
+  const populateAgentState = useCallback((agent: AiAgentSummary) => {
+    setSelectedAgentId(agent.id || null);
+    setAgentName(agent.name || 'Agente Principal (V1)');
+    setAgentDesc(agent.description || '');
+    setProvider(agent.provider || 'openai');
+    setModel(agent.model || AI_PROVIDER_DEFAULT_MODEL.openai);
+    setSystemPrompt(agent.system_prompt || '');
+    setIsActive(agent.is_active || false);
+    setAutoReplyEnabled(agent.auto_reply_enabled || false);
+    setMaxPerConversation(agent.auto_reply_max_per_conversation || 3);
+    setHandoffAgentId(agent.handoff_agent_id || '');
+    setHasStoredKey(Boolean(agent.has_key));
+    setApiKey(agent.has_key ? MASKED_KEY : '');
+    setKeyEdited(false);
+    setHasStoredEmbeddingsKey(Boolean(agent.has_embeddings_key));
+    setEmbeddingsKey(agent.has_embeddings_key ? MASKED_KEY : '');
+    setEmbeddingsKeyEdited(false);
+
+    if (agent.config && typeof agent.config === 'object') {
+      if (agent.config.temperature !== undefined) setTemperature(agent.config.temperature);
+      if (agent.config.max_tokens !== undefined) setMaxTokens(agent.config.max_tokens);
+      if (agent.config.context_message_window !== undefined) setContextWindow(agent.config.context_message_window);
+      if (agent.config.rag_top_k !== undefined) setRagTopK(agent.config.rag_top_k);
+      if (agent.config.rag_similarity_threshold !== undefined) setSimilarityThreshold(agent.config.rag_similarity_threshold);
+      if (agent.config.confidence_threshold !== undefined) setConfidenceThreshold(agent.config.confidence_threshold);
+      if (Array.isArray(agent.config.guardrails)) setGuardrails(agent.config.guardrails);
+    }
+  }, []);
+
+  const fetchConfig = useCallback(async (targetId?: string) => {
     setLoading(true);
     try {
       const res = await fetch('/api/ai/config');
@@ -794,35 +855,79 @@ export function AiConfig() {
       }
       if (data.configured) {
         setConfigured(true);
-        setProvider(data.provider);
-        setModel(data.model);
-        setSystemPrompt(data.system_prompt ?? '');
-        setIsActive(data.is_active);
-        setAutoReplyEnabled(data.auto_reply_enabled);
-        setMaxPerConversation(data.auto_reply_max_per_conversation ?? 3);
-        setHandoffAgentId(data.handoff_agent_id ?? '');
-        setHasStoredKey(Boolean(data.has_key));
-        setApiKey(data.has_key ? MASKED_KEY : '');
-        setKeyEdited(false);
-        setHasStoredEmbeddingsKey(Boolean(data.has_embeddings_key));
-        setEmbeddingsKey(data.has_embeddings_key ? MASKED_KEY : '');
-        setEmbeddingsKeyEdited(false);
-        if (data.config && typeof data.config === 'object') {
-          if (data.config.temperature !== undefined) setTemperature(data.config.temperature);
-          if (data.config.max_tokens !== undefined) setMaxTokens(data.config.max_tokens);
-          if (data.config.context_message_window !== undefined) setContextWindow(data.config.context_message_window);
-          if (data.config.rag_top_k !== undefined) setRagTopK(data.config.rag_top_k);
-          if (data.config.rag_similarity_threshold !== undefined) setSimilarityThreshold(data.config.rag_similarity_threshold);
-          if (data.config.confidence_threshold !== undefined) setConfidenceThreshold(data.config.confidence_threshold);
-          if (Array.isArray(data.config.guardrails)) setGuardrails(data.config.guardrails);
-        }
+        const list = Array.isArray(data.agents) ? data.agents : [];
+        setAgents(list);
+
+        const chosen =
+          list.find((a: AiAgentSummary) => a.id === (targetId || selectedAgentId)) ||
+          list[0] ||
+          data;
+        populateAgentState(chosen);
       }
     } catch {
       toast.error(t('loadFailed'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedAgentId, populateAgentState, t]);
+
+  const handleSelectVersion = (id: string | null) => {
+    if (!id) return;
+    const target = agents.find((a) => a.id === id);
+    if (target) {
+      populateAgentState(target);
+      toast.success(`Versão alterada para: ${target.name || 'Agente'}`);
+    }
+  };
+
+  const handleDuplicateVersion = async () => {
+    if (!selectedAgentId) return;
+    setDuplicating(true);
+    try {
+      const res = await fetch('/api/ai/agents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'duplicate',
+          source_id: selectedAgentId,
+          name: `${agentName} (Cópia V${agents.length + 1})`,
+          description: 'Versão duplicada para teste/backup',
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error ?? 'Falha ao duplicar versão');
+        return;
+      }
+      toast.success('Nova versão/backup criada com sucesso!');
+      await fetchConfig(data.agent?.id);
+    } catch {
+      toast.error('Erro de rede ao duplicar versão');
+    } finally {
+      setDuplicating(false);
+    }
+  };
+
+  const handlePublishVersion = async () => {
+    if (!selectedAgentId) return;
+    setPublishing(true);
+    try {
+      const res = await fetch(`/api/ai/agents/${selectedAgentId}/publish`, {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error ?? 'Falha ao publicar versão');
+        return;
+      }
+      toast.success('Versão publicada com sucesso! Agora ela está respondendo os clientes no WhatsApp.');
+      await fetchConfig(selectedAgentId);
+    } catch {
+      toast.error('Erro ao publicar versão');
+    } finally {
+      setPublishing(false);
+    }
+  };
 
   useEffect(() => {
     if (!accountId || loadedAccountIdRef.current === accountId) return;
@@ -852,6 +957,9 @@ export function AiConfig() {
     embeddingsKeyEdited ? embeddingsKey.trim() || null : undefined;
 
   const buildBody = () => ({
+    id: selectedAgentId || undefined,
+    name: agentName,
+    description: agentDesc || null,
     provider,
     model: model.trim(),
     api_key: keyPayload(),
@@ -913,7 +1021,7 @@ export function AiConfig() {
       const data = await res.json();
       if (res.ok) {
         toast.success(t('saveSuccess'));
-        await fetchConfig();
+        await fetchConfig(selectedAgentId || undefined);
       } else {
         toast.error(data.error ?? t('saveFailed'));
       }
@@ -983,6 +1091,117 @@ export function AiConfig() {
       )}
 
       <div className="space-y-6">
+        {/* GERENCIADOR DE VERSÕES DO AGENTE (V1, V2, BACKUP) */}
+        {configured && agents.length > 0 && (
+          <Card className="border-primary/30 bg-card/60 shadow-sm">
+            <CardHeader className="pb-3">
+              <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Sparkles className="h-4 w-4 text-primary" />
+                    Gerenciador de Versões do Agente (V1 / V2 / Backups)
+                  </CardTitle>
+                  <CardDescription>
+                    Alterne entre versões de teste, crie backups antes de alterar regras e escolha qual versão responderá os clientes.
+                  </CardDescription>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge
+                    variant={isActive ? 'default' : 'secondary'}
+                    className={
+                      isActive
+                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white font-medium'
+                        : 'bg-muted text-muted-foreground font-medium'
+                    }
+                  >
+                    {isActive
+                      ? '🟢 Versão Publicada (Em Produção)'
+                      : '⚪ Rascunho / Backup (Não responde)'}
+                  </Badge>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div className="space-y-1.5 md:col-span-1">
+                  <Label className="text-xs font-semibold text-foreground">
+                    Selecione a Versão do Agente
+                  </Label>
+                  <Select
+                    value={selectedAgentId || undefined}
+                    onValueChange={handleSelectVersion}
+                    disabled={disabled}
+                  >
+                    <SelectTrigger className="h-9 text-xs">
+                      <SelectValue placeholder="Selecione uma versão" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {agents.map((a) => (
+                        <SelectItem key={a.id} value={a.id}>
+                          {a.is_active ? '🟢 [Publicado] ' : '⚪ [Rascunho] '}
+                          {a.name || 'Agente'}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5 md:col-span-1">
+                  <Label className="text-xs font-semibold text-foreground">
+                    Nome desta Versão
+                  </Label>
+                  <Input
+                    value={agentName}
+                    onChange={(e) => setAgentName(e.target.value)}
+                    disabled={disabled}
+                    placeholder="Ex: Agente Principal (V1)"
+                    className="h-9 text-xs"
+                  />
+                </div>
+                <div className="space-y-1.5 md:col-span-1">
+                  <Label className="text-xs font-semibold text-foreground">
+                    Descrição / Nota de Versão
+                  </Label>
+                  <Input
+                    value={agentDesc}
+                    onChange={(e) => setAgentDesc(e.target.value)}
+                    disabled={disabled}
+                    placeholder="Ex: Estável em produção"
+                    className="h-9 text-xs"
+                  />
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center justify-end gap-2 pt-1 border-t border-border/40">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDuplicateVersion}
+                  disabled={disabled || duplicating || !selectedAgentId}
+                  className="text-xs"
+                >
+                  {duplicating && (
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  )}
+                  + Duplicar Atual (Criar V{agents.length + 1})
+                </Button>
+                {!isActive && (
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={handlePublishVersion}
+                    disabled={disabled || publishing || !selectedAgentId}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs"
+                  >
+                    {publishing && (
+                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                    )}
+                    🚀 Publicar esta versão no WhatsApp
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">

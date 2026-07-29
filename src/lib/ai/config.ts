@@ -3,6 +3,9 @@ import { decrypt } from '@/lib/whatsapp/encryption'
 import type { AiConfig, AiAdvancedConfig } from './types'
 
 interface AiConfigRow {
+  id: string
+  name?: string
+  description?: string | null
   provider: 'openai' | 'anthropic'
   model: string
   api_key: string
@@ -16,7 +19,7 @@ interface AiConfigRow {
 }
 
 const CONFIG_COLUMNS =
-  'provider, model, api_key, system_prompt, is_active, auto_reply_enabled, auto_reply_max_per_conversation, handoff_agent_id, embeddings_api_key, config'
+  'id, name, description, provider, model, api_key, system_prompt, is_active, auto_reply_enabled, auto_reply_max_per_conversation, handoff_agent_id, embeddings_api_key, config'
 
 /**
  * Load and decrypt the account's AI config for *use* (draft or
@@ -35,10 +38,20 @@ export async function loadAiConfig(
   opts: { requireActive?: boolean } = {},
 ): Promise<AiConfig | null> {
   const { requireActive = true } = opts
-  const { data, error } = await db
+
+  let query = db
     .from('ai_configs')
     .select(CONFIG_COLUMNS)
     .eq('account_id', accountId)
+
+  if (requireActive) {
+    query = query.eq('is_active', true)
+  }
+
+  const { data, error } = await query
+    .order('is_active', { ascending: false })
+    .order('updated_at', { ascending: false })
+    .limit(1)
     .maybeSingle()
 
   if (error) throw error
@@ -71,6 +84,9 @@ export async function loadAiConfig(
   }
 
   return {
+    id: row.id,
+    name: row.name ?? 'Agente Principal (V1)',
+    description: row.description ?? null,
     provider: row.provider,
     model: row.model,
     apiKey: decrypt(row.api_key),

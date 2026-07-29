@@ -25,15 +25,16 @@ export async function GET() {
   try {
     const { supabase, accountId } = await getCurrentAccount()
 
-    const { data, error } = await supabase
+    const { data: rows, error } = await supabase
       .from('ai_configs')
       // `api_key` is selected only to derive `has_key` — it is stripped
       // out below and never returned to the client.
       .select(
-        'provider, model, system_prompt, is_active, auto_reply_enabled, auto_reply_max_per_conversation, handoff_agent_id, api_key, embeddings_api_key, config',
+        'id, name, description, provider, model, system_prompt, is_active, auto_reply_enabled, auto_reply_max_per_conversation, handoff_agent_id, api_key, embeddings_api_key, config, updated_at',
       )
       .eq('account_id', accountId)
-      .maybeSingle()
+      .order('is_active', { ascending: false })
+      .order('updated_at', { ascending: false })
 
     if (error) {
       console.error('[ai/config GET] fetch error:', error)
@@ -43,15 +44,27 @@ export async function GET() {
       )
     }
 
-    if (!data) return NextResponse.json({ configured: false })
-    // The keys are selected only to derive the has_* flags; neither is
-    // returned to the client.
-    const { api_key, embeddings_api_key, ...safe } = data
+    if (!rows || rows.length === 0) {
+      return NextResponse.json({ configured: false, agents: [] })
+    }
+
+    const agents = rows.map((r) => {
+      const { api_key, embeddings_api_key, ...safe } = r
+      return {
+        ...safe,
+        name: r.name ?? 'Agente Principal (V1)',
+        has_key: !!api_key,
+        has_embeddings_key: !!embeddings_api_key,
+      }
+    })
+
+    // The primary agent is the first row (active or most recently updated)
+    const primary = agents[0]
+
     return NextResponse.json({
       configured: true,
-      has_key: !!api_key,
-      has_embeddings_key: !!embeddings_api_key,
-      ...safe,
+      agents,
+      ...primary,
     })
   } catch (err) {
     return toErrorResponse(err)
@@ -125,12 +138,24 @@ export async function POST(request: Request) {
         : ''
     const clearEmbeddingsKey = body.embeddings_api_key === null
 
-    // Reuse the stored key when the form didn't send a fresh one.
-    const { data: existing } = await supabase
+    const targetId =
+      typeof body.id === 'string' && body.id.trim() ? body.id.trim() : null
+
+    let existingQuery = supabase
       .from('ai_configs')
       .select('id, provider, model, api_key')
       .eq('account_id', accountId)
-      .maybeSingle()
+
+    if (targetId) {
+      existingQuery = existingQuery.eq('id', targetId)
+    } else {
+      existingQuery = existingQuery
+        .order('is_active', { ascending: false })
+        .order('updated_at', { ascending: false })
+        .limit(1)
+    }
+
+    const { data: existing } = await existingQuery.maybeSingle()
 
     let apiKeyPlain: string
     if (rawKey) {
@@ -218,10 +243,26 @@ export async function POST(request: Request) {
       shared.embeddings_api_key = null
     }
 
+    if (typeof body.name === 'string' && body.name.trim()) {
+      shared.name = body.name.trim()
+    }
+    if (body.description !== undefined) {
+      shared.description =
+        typeof body.description === 'string' ? body.description.trim() : null
+    }
+
+    if (isActive) {
+      await supabase
+        .from('ai_configs')
+        .update({ is_active: false })
+        .eq('account_id', accountId)
+    }
+
     if (existing) {
       const { error: upErr } = await supabase
         .from('ai_configs')
         .update(encryptedKey ? { ...shared, api_key: encryptedKey } : shared)
+        .eq('id', existing.id)
         .eq('account_id', accountId)
       if (upErr) {
         console.error('[ai/config POST] update error:', upErr)
@@ -235,6 +276,7 @@ export async function POST(request: Request) {
         account_id: accountId,
         created_by: userId,
         api_key: encryptedKey, // guaranteed non-null: rawKey required when no existing row
+        name: typeof body.name === 'string' && body.name.trim() ? body.name.trim() : 'Agente Principal (V1)',
         ...shared,
       })
       if (insErr) {

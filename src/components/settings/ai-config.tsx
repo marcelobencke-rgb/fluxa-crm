@@ -407,6 +407,16 @@ export function AiConfig() {
 
   const disabled = !canEdit || saving;
 
+  const selectedHandoffMember = members.find(
+    (m) => m.user_id === handoffAgentId
+  );
+  const handoffLabel =
+    !handoffAgentId || handoffAgentId === HANDOFF_QUEUE
+      ? t('handoffQueue')
+      : selectedHandoffMember
+        ? memberLabel(selectedHandoffMember)
+        : t('handoffQueue');
+
   return (
     <div>
       <SettingsPanelHead
@@ -630,11 +640,11 @@ export function AiConfig() {
                 id="ai-max"
                 type="number"
                 min={1}
-                max={20}
+                max={100}
                 value={maxPerConversation}
                 onChange={(e) =>
                   setMaxPerConversation(
-                    Math.min(20, Math.max(1, Number(e.target.value) || 1)),
+                    Math.min(100, Math.max(1, Number(e.target.value) || 1)),
                   )
                 }
                 disabled={disabled || !autoReplyEnabled}
@@ -655,7 +665,7 @@ export function AiConfig() {
                 disabled={disabled || !autoReplyEnabled}
               >
                 <SelectTrigger id="ai-handoff">
-                  <SelectValue />
+                  <SelectValue>{handoffLabel}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value={HANDOFF_QUEUE}>

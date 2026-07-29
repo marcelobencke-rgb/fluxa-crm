@@ -1077,6 +1077,11 @@ export function AiConfig() {
         ? memberLabel(selectedHandoffMember)
         : t('handoffQueue');
 
+  const selectedAgentObj = agents.find((a) => a.id === selectedAgentId);
+  const selectedAgentLabel = selectedAgentObj
+    ? `${selectedAgentObj.is_active ? '🟢 [Publicado] ' : '⚪ [Rascunho] '}${selectedAgentObj.name || 'Agente'}`
+    : 'Selecione uma versão';
+
   return (
     <div>
       <SettingsPanelHead
@@ -1133,7 +1138,7 @@ export function AiConfig() {
                     disabled={disabled}
                   >
                     <SelectTrigger className="h-9 text-xs">
-                      <SelectValue placeholder="Selecione uma versão" />
+                      <SelectValue>{selectedAgentLabel}</SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       {agents.map((a) => (

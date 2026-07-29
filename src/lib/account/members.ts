@@ -21,5 +21,9 @@ export async function fetchAccountMembers(): Promise<AccountMember[]> {
 
 /** Display label for a member: full name → email → raw id. */
 export function memberLabel(m: AccountMember): string {
-  return m.full_name || m.email || m.user_id;
+  const name = m.full_name?.trim();
+  if (name) return name;
+  const email = m.email?.trim();
+  if (email) return email;
+  return `Usuário (${m.user_id.slice(0, 8)}...)`;
 }

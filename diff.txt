@@ -1,0 +1,445 @@
+﻿diff --git a/messages/pt-BR.json b/messages/pt-BR.json
+index 33ddc0b..9e550bc 100644
+--- a/messages/pt-BR.json
++++ b/messages/pt-BR.json
+@@ -72,7 +72,18 @@
+       "newTodayVsYesterday": "novos hoje vs ontem",
+       "vsYesterday": "vs ontem",
+       "openDeals": "{count} {count, plural, =1 {neg├│cio aberto} other {neg├│cios abertos}}",
+-      "noChange": "Sem altera├º├úo {suffix}"
++      "noChange": "Sem altera├º├úo {suffix}",
++      "unknown": "Desconhecido",
++      "newMessage": "Nova mensagem de {who}",
++      "newContact": "Novo contato: {who}",
++      "dealUpdatedInStage": "Neg├│cio \"{title}\" em {stage}",
++      "dealUpdated": "Neg├│cio \"{title}\" atualizado",
++      "broadcastSentTo": "Transmiss├úo \"{name}\" enviada para {count} contatos",
++      "broadcastStatus": "Transmiss├úo \"{name}\" {status} ({count} destinat├írios)",
++      "aContact": "um contato",
++      "automation": "Automa├º├úo",
++      "automationFailed": "Automa├º├úo \"{name}\" falhou para {who}",
++      "automationTriggered": "Automa├º├úo \"{name}\" acionada para {who}"
+     },
+     "quickActions": {
+       "newContact": "Novo Contato",
+diff --git a/src/app/(dashboard)/dashboard/page.tsx b/src/app/(dashboard)/dashboard/page.tsx
+index 19aae91..d99eb55 100644
+--- a/src/app/(dashboard)/dashboard/page.tsx
++++ b/src/app/(dashboard)/dashboard/page.tsx
+@@ -105,11 +105,11 @@ export default function DashboardPage() {
+     // Fetch up to 50 so the biggest page-size option in the feed
+     // (50 rows) is already in memory ÔÇö switching sizes then becomes
+     // a pure client-side slice with no extra round trip.
+-    void loadActivity(db, 50)
++    void loadActivity(db, 50, t)
+       .then((a) => setActivity(a))
+       .catch((err) => console.error('[dashboard] activity failed:', err))
+       .finally(() => setActivityLoading(false))
+-  }, [])
++  }, [t])
+ 
+   useEffect(() => {
+     loadAll()
+diff --git a/src/app/(dashboard)/notifications/page.tsx b/src/app/(dashboard)/notifications/page.tsx
+index 6628b41..5adfb47 100644
+--- a/src/app/(dashboard)/notifications/page.tsx
++++ b/src/app/(dashboard)/notifications/page.tsx
+@@ -111,7 +111,7 @@ export default function NotificationsPage() {
+         load();
+       }
+     },
+-    [load],
++    [load, t],
+   );
+ 
+   const handleClick = useCallback(
+@@ -143,7 +143,7 @@ export default function NotificationsPage() {
+       toast.error(t("failedToMarkAllRead"));
+       load();
+     }
+-  }, [unreadIds.length, load]);
++  }, [unreadIds.length, load, t]);
+ 
+   if (error) {
+     return (
+diff --git a/src/app/api/whatsapp/config/route.ts b/src/app/api/whatsapp/config/route.ts
+index d683d6c..af4f241 100644
+--- a/src/app/api/whatsapp/config/route.ts
++++ b/src/app/api/whatsapp/config/route.ts
+@@ -372,7 +372,7 @@ export async function POST(request: Request) {
+       }
+     }
+ 
+-    const baseRow: any = {
++    const baseRow: Record<string, unknown> = {
+       provider,
+       status: registrationError ? 'disconnected' : 'connected',
+       connected_at: registrationError ? null : new Date().toISOString(),
+diff --git a/src/app/api/whatsapp/webhook/evolution/route.ts b/src/app/api/whatsapp/webhook/evolution/route.ts
+index 1ced59c..21af829 100644
+--- a/src/app/api/whatsapp/webhook/evolution/route.ts
++++ b/src/app/api/whatsapp/webhook/evolution/route.ts
+@@ -6,7 +6,7 @@ import { normalizePhone } from '@/lib/whatsapp/phone-utils'
+ 
+ export const maxDuration = 60
+ 
+-let _adminClient: any = null
++let _adminClient: unknown = null
+ function supabaseAdmin() {
+   if (!_adminClient) {
+     _adminClient = createClient(
+@@ -18,7 +18,7 @@ function supabaseAdmin() {
+ }
+ 
+ export async function POST(request: Request) {
+-  let body: any
++  let body: Record<string, unknown>
+   try {
+     body = await request.json()
+   } catch (error) {
+@@ -50,8 +50,8 @@ export async function POST(request: Request) {
+   return NextResponse.json({ status: 'received' }, { status: 200 })
+ }
+ 
+-async function processEvolutionWebhook(body: any, instanceName: string) {
+-  let configRows: any[] = []
++async function processEvolutionWebhook(body: Record<string, unknown>, instanceName: string) {
++  let configRows: import('@/types').WhatsAppConfigRow[] = []
+   if (instanceName) {
+     const { data } = await supabaseAdmin()
+       .from('whatsapp_config')
+@@ -157,7 +157,7 @@ async function processEvolutionWebhook(body: any, instanceName: string) {
+     const quotedStanzaId = contextInfo?.stanzaId || contextInfo?.quotedMessage?.key?.id || null
+ 
+     // Transform Evolution payload into Meta-like format
+-    const metaMessage: any = {
++    const metaMessage: Record<string, unknown> = {
+       id: msgId,
+       from: phone,
+       timestamp: String(
+@@ -327,6 +327,7 @@ async function processEvolutionWebhook(body: any, instanceName: string) {
+   }
+ }
+ 
++// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ async function processOutboundEvolutionMessage(msgData: any, config: any) {
+   const remoteJid = msgData?.key?.remoteJid || msgData?.remoteJid || msgData?.key?.participant
+   if (!remoteJid || remoteJid.includes('@g.us')) return // Ignore groups for now
+diff --git a/src/components/inbox/contact-sidebar.tsx b/src/components/inbox/contact-sidebar.tsx
+index f3aa26c..6b2a0ac 100644
+--- a/src/components/inbox/contact-sidebar.tsx
++++ b/src/components/inbox/contact-sidebar.tsx
+@@ -47,8 +47,10 @@ export function ContactSidebar({ contact, onUpdateContact }: ContactSidebarProps
+   const [savingName, setSavingName] = useState(false);
+ 
+   useEffect(() => {
+-    setNameValue(contact?.name || "");
+-    setEditingName(false);
++    queueMicrotask(() => {
++      setNameValue(contact?.name || "");
++      setEditingName(false);
++    });
+   }, [contact?.id, contact?.name]);
+ 
+   const handleSaveName = useCallback(async () => {
+diff --git a/src/components/inbox/conversation-list.tsx b/src/components/inbox/conversation-list.tsx
+index 3c0ae3f..15243f5 100644
+--- a/src/components/inbox/conversation-list.tsx
++++ b/src/components/inbox/conversation-list.tsx
+@@ -257,8 +257,10 @@ export function ConversationList({
+   const [notifPerm, setNotifPerm] = useState<NotificationPermission>("default");
+ 
+   useEffect(() => {
+-    setSoundMutedState(isSoundMuted());
+-    setNotifPerm(getBrowserNotificationPermission());
++    queueMicrotask(() => {
++      setSoundMutedState(isSoundMuted());
++      setNotifPerm(getBrowserNotificationPermission());
++    });
+   }, []);
+ 
+   const handleToggleSound = useCallback(() => {
+diff --git a/src/components/pipelines/deal-form.tsx b/src/components/pipelines/deal-form.tsx
+index 04edad4..16a773e 100644
+--- a/src/components/pipelines/deal-form.tsx
++++ b/src/components/pipelines/deal-form.tsx
+@@ -150,7 +150,7 @@ export function DealForm({
+   // case runs setLinkedConversation inside the async fetch callback.
+   useEffect(() => {
+     if (!open) {
+-      setLinkedConversation(null);
++      queueMicrotask(() => setLinkedConversation(null));
+       return;
+     }
+     let cancelled = false;
+@@ -168,7 +168,7 @@ export function DealForm({
+         }
+       }
+       if (!contactId) {
+-        setLinkedConversation(null);
++        queueMicrotask(() => setLinkedConversation(null));
+         return;
+       }
+       const { data } = await supabase
+@@ -189,7 +189,7 @@ export function DealForm({
+   useEffect(() => {
+     if (!linkModalOpen) return;
+     let cancelled = false;
+-    setFetchingConvs(true);
++    queueMicrotask(() => setFetchingConvs(true));
+     (async () => {
+       let query = supabase
+         .from("conversations")
+diff --git a/src/hooks/use-cached-query.ts b/src/hooks/use-cached-query.ts
+index 5c705c9..e67434a 100644
+--- a/src/hooks/use-cached-query.ts
++++ b/src/hooks/use-cached-query.ts
+@@ -6,15 +6,15 @@ import { useEffect, useState } from "react";
+  * A lightweight global promise cache to avoid duplicate fetches
+  * across components mounted at the same time (e.g. settings panels).
+  */
+-const cache = new Map<string, { data: any; timestamp: number }>();
+-const inflight = new Map<string, Promise<any>>();
++const cache = new Map<string, { data: unknown; timestamp: number }>();
++const inflight = new Map<string, Promise<unknown>>();
+ 
+ const STALE_TIME = 5 * 60 * 1000; // 5 minutes
+ 
+ export function useCachedQuery<T>(
+   key: string | null,
+   fetcher: () => Promise<T>,
+-  dependencies: any[] = []
++  dependencies: unknown[] = []
+ ): { data: T | null; loading: boolean; error: Error | null; mutate: (data: T) => void } {
+   const [data, setData] = useState<T | null>(() => {
+     if (!key) return null;
+diff --git a/src/lib/ai/ai-tools.ts b/src/lib/ai/ai-tools.ts
+index 4ba4f34..8391713 100644
+--- a/src/lib/ai/ai-tools.ts
++++ b/src/lib/ai/ai-tools.ts
+@@ -28,7 +28,7 @@ export async function executeAiTool(
+   accountId: string,
+   contactId: string,
+   toolName: string,
+-  args: any
++  args: Record<string, unknown>
+ ): Promise<string> {
+   const db = supabaseAdmin()
+ 
+diff --git a/src/lib/ai/generate.ts b/src/lib/ai/generate.ts
+index fbce237..af76259 100644
+--- a/src/lib/ai/generate.ts
++++ b/src/lib/ai/generate.ts
+@@ -16,7 +16,7 @@ export interface GenerateArgs {
+   /** Recent conversation turns, oldest first. */
+   messages: ChatMessage[]
+   /** Available tools schemas. */
+-  tools?: any[]
++  tools?: unknown[]
+ }
+ 
+ /**
+@@ -38,7 +38,7 @@ export async function generateReply(args: GenerateArgs): Promise<GenerateResult>
+     maxTokens: config.config?.max_tokens ?? 1024,
+   }
+ 
+-  let result: { text: string; usage: AiUsage | null; tool_calls?: any[] }
++  let result: { text: string; usage: AiUsage | null; tool_calls?: unknown[] }
+   switch (config.provider) {
+     case 'openai':
+       result = await generateOpenAi(providerArgs)
+@@ -65,7 +65,7 @@ export async function generateReply(args: GenerateArgs): Promise<GenerateResult>
+  * didn't report it).
+  */
+ export function parseGeneration(
+-  result: { text: string; usage: AiUsage | null; tool_calls?: any[] },
++  result: { text: string; usage: AiUsage | null; tool_calls?: unknown[] },
+ ): GenerateResult {
+   const HANDOFF_SENTINEL_PATTERN = /\[\[?\s*(HANDOFF|TRANSFER|TRANSFER├èNCIA|HANDOFF_QUEUE)\s*\]\]?/i
+   const NATURAL_HANDOFF_PATTERN = /(vou\s+(chamar|transferir|encaminhar|passar)|chamar\s+um\s+(especialista|atendente|humano)|transferir\s+para|encaminhar\s+para|nossa\s+equipe\s+(vai|ir├í)\s+(atender|falar|entrar)|um\s+(especialista|atendente|humano)\s+(vai|ir├í|est├í))/i
+diff --git a/src/lib/ai/providers/openai.ts b/src/lib/ai/providers/openai.ts
+index 6ad7175..395f3c3 100644
+--- a/src/lib/ai/providers/openai.ts
++++ b/src/lib/ai/providers/openai.ts
+@@ -49,8 +49,8 @@ export async function generateOpenAi(args: ProviderArgs): Promise<ProviderResult
+           { role: 'system', content: systemPrompt },
+           ...mergeConsecutive(messages).map(m => {
+             // Strip undefined fields to keep OpenAI happy
+-            const msg: any = { role: m.role, content: m.content || "" }
+-            if (m.tool_calls) msg.tool_calls = m.tool_calls.map((tc: any) => ({
++            const msg: Record<string, unknown> = { role: m.role, content: m.content || "" }
++            if (m.tool_calls) msg.tool_calls = m.tool_calls.map((tc: { id: string, name: string, arguments: string }) => ({
+               id: tc.id,
+               type: 'function',
+               function: { name: tc.name, arguments: tc.arguments }
+diff --git a/src/lib/ai/providers/shared.ts b/src/lib/ai/providers/shared.ts
+index b955708..0bb0dc3 100644
+--- a/src/lib/ai/providers/shared.ts
++++ b/src/lib/ai/providers/shared.ts
+@@ -10,7 +10,7 @@ export interface ProviderArgs {
+   systemPrompt: string
+   messages: ChatMessage[]
+   timeoutMs: number
+-  tools?: any[]
++  tools?: unknown[]
+   temperature?: number
+   maxTokens?: number
+ }
+diff --git a/src/lib/automations/meta-send.ts b/src/lib/automations/meta-send.ts
+index 9f82b67..fdcb0c6 100644
+--- a/src/lib/automations/meta-send.ts
++++ b/src/lib/automations/meta-send.ts
+@@ -105,7 +105,7 @@ import type { IWhatsAppProvider } from '@/lib/whatsapp/providers/types'
+ import { MetaProvider } from '@/lib/whatsapp/providers/meta-provider'
+ import { EvolutionProvider } from '@/lib/whatsapp/providers/evolution-provider'
+ 
+-function getWhatsAppProvider(config: any): IWhatsAppProvider {
++function getWhatsAppProvider(config: import('@/types').WhatsAppConfig): IWhatsAppProvider {
+   if (config.provider === 'evolution') {
+     return new EvolutionProvider(
+       config.evolution_api_url,
+diff --git a/src/lib/dashboard/queries.ts b/src/lib/dashboard/queries.ts
+index ac03a2d..dcb5188 100644
+--- a/src/lib/dashboard/queries.ts
++++ b/src/lib/dashboard/queries.ts
+@@ -265,7 +265,11 @@ export async function loadResponseTime(db: DB): Promise<ResponseTimeSummary> {
+ 
+ // --- 5. Activity feed --------------------------------------------------
+ 
+-export async function loadActivity(db: DB, limit = 20): Promise<ActivityItem[]> {
++export async function loadActivity(
++  db: DB,
++  limit = 20,
++  t: (key: string, params?: Record<string, string | number>) => string,
++): Promise<ActivityItem[]> {
+   // Pull ~10 from each source (plenty of headroom after merge-sort),
+   // then interleave by timestamp. The individual per-table limits
+   // keep the payload small; the final limit is enforced after sort.
+@@ -314,11 +318,11 @@ export async function loadActivity(db: DB, limit = 20): Promise<ActivityItem[]>
+   }>) {
+     const conv = Array.isArray(m.conversations) ? m.conversations[0] : m.conversations
+     const contact = Array.isArray(conv?.contacts) ? conv?.contacts[0] : conv?.contacts
+-    const who = contact?.name || contact?.phone || 'Unknown'
++    const who = contact?.name || contact?.phone || t('unknown')
+     items.push({
+       id: `msg-${m.id}`,
+       kind: 'message',
+-      text: `New message from ${who}`,
++      text: t('newMessage', { who }),
+       at: m.created_at,
+       href: `/inbox?c=${m.conversation_id}`,
+     })
+@@ -328,7 +332,7 @@ export async function loadActivity(db: DB, limit = 20): Promise<ActivityItem[]>
+     items.push({
+       id: `contact-${c.id}`,
+       kind: 'contact',
+-      text: `New contact: ${c.name || c.phone}`,
++      text: t('newContact', { who: c.name || c.phone }),
+       at: c.created_at,
+       href: '/contacts',
+     })
+@@ -345,8 +349,8 @@ export async function loadActivity(db: DB, limit = 20): Promise<ActivityItem[]>
+       id: `deal-${d.id}`,
+       kind: 'deal',
+       text: stage?.name
+-        ? `Deal "${d.title}" in ${stage.name}`
+-        : `Deal "${d.title}" updated`,
++        ? t('dealUpdatedInStage', { title: d.title, stage: stage.name })
++        : t('dealUpdated', { title: d.title }),
+       at: d.updated_at,
+       href: '/pipelines',
+     })
+@@ -359,14 +363,12 @@ export async function loadActivity(db: DB, limit = 20): Promise<ActivityItem[]>
+     total_recipients: number
+     created_at: string
+   }>) {
+-    const label =
+-      b.status === 'sent'
+-        ? `sent to ${b.total_recipients} contacts`
+-        : `${b.status} (${b.total_recipients} recipients)`
+     items.push({
+       id: `broadcast-${b.id}`,
+       kind: 'broadcast',
+-      text: `Broadcast "${b.name}" ${label}`,
++      text: b.status === 'sent' 
++        ? t('broadcastSentTo', { name: b.name, count: b.total_recipients })
++        : t('broadcastStatus', { name: b.name, status: b.status, count: b.total_recipients }),
+       at: b.created_at,
+       href: '/broadcasts',
+     })
+@@ -382,12 +384,14 @@ export async function loadActivity(db: DB, limit = 20): Promise<ActivityItem[]>
+   }>) {
+     const automation = Array.isArray(l.automation) ? l.automation[0] : l.automation
+     const contact = Array.isArray(l.contact) ? l.contact[0] : l.contact
+-    const who = contact?.name || contact?.phone || 'a contact'
+-    const autoName = automation?.name || 'Automation'
++    const who = contact?.name || contact?.phone || t('aContact')
++    const autoName = automation?.name || t('automation')
+     items.push({
+       id: `auto-${l.id}`,
+       kind: 'automation',
+-      text: `Automation "${autoName}" ${l.status === 'failed' ? 'failed for' : 'triggered for'} ${who}`,
++      text: l.status === 'failed'
++        ? t('automationFailed', { name: autoName, who })
++        : t('automationTriggered', { name: autoName, who }),
+       at: l.created_at,
+     })
+   }
+diff --git a/src/lib/flows/meta-send.ts b/src/lib/flows/meta-send.ts
+index cdba699..4d994ff 100644
+--- a/src/lib/flows/meta-send.ts
++++ b/src/lib/flows/meta-send.ts
+@@ -20,7 +20,7 @@ import type { IWhatsAppProvider } from '@/lib/whatsapp/providers/types'
+ import { MetaProvider } from '@/lib/whatsapp/providers/meta-provider'
+ import { EvolutionProvider } from '@/lib/whatsapp/providers/evolution-provider'
+ 
+-function getWhatsAppProvider(config: any): IWhatsAppProvider {
++function getWhatsAppProvider(config: import('@/types').WhatsAppConfig): IWhatsAppProvider {
+   if (config.provider === 'evolution') {
+     return new EvolutionProvider(
+       config.evolution_api_url,
+diff --git a/src/lib/whatsapp/providers/evolution-provider.ts b/src/lib/whatsapp/providers/evolution-provider.ts
+index 08d91a7..4796502 100644
+--- a/src/lib/whatsapp/providers/evolution-provider.ts
++++ b/src/lib/whatsapp/providers/evolution-provider.ts
+@@ -70,15 +70,15 @@ export class EvolutionProvider implements IWhatsAppProvider {
+     
+     if (p.kind === 'buttons') {
+       fallbackText += '\n\n';
+-      p.buttons.forEach((btn: any, idx: number) => {
++      p.buttons.forEach((btn: { reply: { title: string } }, idx: number) => {
+         fallbackText += `[${idx + 1}] ${btn.reply.title}\n`;
+       });
+       fallbackText += '\n(Responda com o n├║mero da op├º├úo)';
+     } else if (p.kind === 'list') {
+       fallbackText += '\n\n';
+-      p.sections.forEach((sec: any) => {
++      p.sections.forEach((sec: { title: string; rows: { title: string; description?: string }[] }) => {
+         fallbackText += `*${sec.title}*\n`;
+-        sec.rows.forEach((row: any, idx: number) => {
++        sec.rows.forEach((row: { title: string; description?: string }, idx: number) => {
+           fallbackText += `[${idx + 1}] ${row.title}${row.description ? ` - ${row.description}` : ''}\n`;
+         });
+       });
+diff --git a/src/lib/whatsapp/providers/types.ts b/src/lib/whatsapp/providers/types.ts
+index a134201..3f349b6 100644
+--- a/src/lib/whatsapp/providers/types.ts
++++ b/src/lib/whatsapp/providers/types.ts
+@@ -27,7 +27,7 @@ export interface SendMessageParams {
+ 
+ export interface SendInteractiveParams {
+   to: string;
+-  interactive: any; // Use the existing interactive payload types
++  interactive: unknown; // Use the existing interactive payload types
+   contextMessageId?: string;
+   contextFromMe?: boolean;
+ }
+@@ -46,7 +46,7 @@ export interface SendTemplateParams {
+   to: string;
+   templateName: string;
+   templateLanguage: string;
+-  templateMessageParams?: any;
++  templateMessageParams?: unknown;
+   contextMessageId?: string;
+   contextFromMe?: boolean;
+ }

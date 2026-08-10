@@ -124,7 +124,7 @@ export function CreateDealModal({
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
               <Label>Funil de Vendas</Label>
-              <Select value={selectedPipelineId} onValueChange={setSelectedPipelineId}>
+              <Select value={selectedPipelineId} onValueChange={(v) => v && setSelectedPipelineId(v)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione um funil" />
                 </SelectTrigger>

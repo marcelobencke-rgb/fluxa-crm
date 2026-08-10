@@ -160,10 +160,7 @@ export function ContactSidebar({ contact, onUpdateContact }: ContactSidebarProps
       } else {
         // Temp id until real response
         setTags((prev) => [...prev, { ...tag, contact_tag_id: `temp-${tag.id}` }]);
-        const ct = await addContactTag(contact.id, tag.id);
-        if (ct) {
-          setTags((prev) => prev.map(t => t.id === tag.id ? { ...t, contact_tag_id: ct.id } : t));
-        }
+        await addContactTag(contact.id, tag.id);
       }
     } catch (err) {
       toast.error(tSidebar("errorToggleTag", { fallback: "Erro ao atualizar tags" }));
